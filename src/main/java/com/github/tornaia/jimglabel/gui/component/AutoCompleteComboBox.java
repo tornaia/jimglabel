@@ -53,8 +53,7 @@ public class AutoCompleteComboBox extends JComboBox<String> {
                 public void insertUpdate(DocumentEvent e) {
                     textField.getDocument().removeDocumentListener(this);
                     textField.moveCaretPosition(textField.getText().length());
-                    textField.setSelectionStart(0);
-                    textField.setSelectionEnd(textField.getText().length());
+                    textField.selectAll();
                 }
             });
 
@@ -71,8 +70,7 @@ public class AutoCompleteComboBox extends JComboBox<String> {
                             AutoCompleteComboBox.this.setSelectedItem(matchingItems[0]);
                             AutoCompleteComboBox.this.hidePopup();
                             textField.moveCaretPosition(textField.getText().length());
-                            textField.setSelectionStart(0);
-                            textField.setSelectionEnd(textField.getText().length());
+                            textField.selectAll();
                         } else {
                             setSelectedIndex(-1);
                             AutoCompleteComboBox.this.hidePopup();
