@@ -370,6 +370,42 @@ public class AppFrame {
                                 drawFrom.set(new Point((int) right, (int) bottom));
                                 drawTo.set(new Point(e.getX(), (int) top));
                                 imagePanel.repaint();
+                            } else if (selectedObjectControl == ObjectControl.MOVE) {
+                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
+                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
+                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
+                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
+                                int px = mousePressedPoint.x;
+                                int py = mousePressedPoint.y;
+                                int cx = e.getX();
+                                int cy = e.getY();
+                                top = top - (py - cy);
+                                right = right - (px - cx);
+                                bottom = bottom - (py - cy);
+                                left = left - (px - cx);
+
+                                int scaledImageWidth = scaledImage.getWidth(null);
+                                int scaledImageHeight = scaledImage.getHeight(null);
+                                if (left < 0) {
+                                    right += -left;
+                                    left = 0;
+                                }
+                                if (top < 0) {
+                                    bottom += -top;
+                                    top = 0;
+                                }
+                                if (right > scaledImageWidth - 1) {
+                                    left -= right - scaledImageWidth - 1;
+                                    right = scaledImageWidth - 1;
+                                }
+                                if (bottom > scaledImageHeight) {
+                                    top -= bottom - scaledImageHeight;
+                                    bottom = scaledImageHeight;
+                                }
+
+                                drawFrom.set(new Point((int) left, (int) top));
+                                drawTo.set(new Point((int) right, (int) bottom));
+                                imagePanel.repaint();
                             } else if (selectedObjectControl == ObjectControl.RIGHT) {
                                 float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
                                 float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
@@ -411,6 +447,8 @@ public class AppFrame {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR));
                             } else if (DetectedObjectUtil.isLeftControl(scaledImage, selectedObject, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR));
+                            } else if (DetectedObjectUtil.isMoveControl(scaledImage, selectedObject, point)) {
+                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
                             } else if (DetectedObjectUtil.isRightControl(scaledImage, selectedObject, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR));
                             } else if (DetectedObjectUtil.isBottomLeftControl(scaledImage, selectedObject, point)) {
@@ -446,8 +484,13 @@ public class AppFrame {
 
                     @Override
                     public void mouseReleased(MouseEvent e) {
+                        int scaledImageWidth = scaledImage.getWidth(null);
+                        int scaledImageHeight = scaledImage.getHeight(null);
+                        Point c = new Point(Math.min(scaledImageWidth, Math.max(0, e.getX())), Math.min(scaledImageHeight, Math.max(0, e.getY())));
+
                         Point from = drawFrom.get();
-                        Point to = e.getPoint();
+                        Point to = drawTo.get();
+
                         if (selectedObjectControl == null ||
                                 selectedObjectControl == ObjectControl.TOP_LEFT ||
                                 selectedObjectControl == ObjectControl.TOP_RIGHT ||
@@ -456,14 +499,12 @@ public class AppFrame {
                             if (from != null) {
                                 int fromX = from.x;
                                 int fromY = from.y;
-                                int toX = to.x;
-                                int toY = to.y;
+                                int toX = c.x;
+                                int toY = c.y;
                                 int x = Math.min(fromX, toX);
                                 int y = Math.min(fromY, toY);
                                 int width = Math.abs(toX - fromX);
                                 int height = Math.abs(toY - fromY);
-                                int scaledImageWidth = scaledImage.getWidth(null);
-                                int scaledImageHeight = scaledImage.getHeight(null);
                                 float top = (float) y / scaledImageHeight;
                                 float right = (float) (x + width) / scaledImageWidth;
                                 float bottom = (float) (y + height) / scaledImageHeight;
@@ -475,10 +516,25 @@ public class AppFrame {
                                 drawTo.set(null);
                                 imagePanel.repaint();
                             }
+                        } else if (selectedObjectControl == ObjectControl.MOVE) {
+                            int fromX = from.x;
+                            int fromY = from.y;
+                            int toX = to.x;
+                            int toY = to.y;
+                            float top = (float) fromY / scaledImageHeight;
+                            float right = (float) toX / scaledImageWidth;
+                            float bottom = (float) toY / scaledImageHeight;
+                            float left = (float) fromX / scaledImageWidth;
+                            detectedObjects.add(new DetectedObject(null, top, right, bottom, left));
+                            updateObjectsPanel();
+
+                            drawFrom.set(null);
+                            drawTo.set(null);
+                            imagePanel.repaint();
                         } else if (selectedObjectControl == ObjectControl.TOP) {
                             float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
-                            float top = (to.y < originalBottom) ? (float) to.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
-                            float bottom = (to.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) to.y / scaledImage.getHeight(null);
+                            float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
+                            float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
                             detectedObjects.add(new DetectedObject(null, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                             updateObjectsPanel();
 
@@ -487,8 +543,8 @@ public class AppFrame {
                             imagePanel.repaint();
                         } else if (selectedObjectControl == ObjectControl.LEFT) {
                             float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
-                            float left = (to.x < originalRight) ? (float) to.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
-                            float right = (to.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) to.x / scaledImage.getWidth(null);
+                            float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
+                            float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
                             detectedObjects.add(new DetectedObject(null, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                             updateObjectsPanel();
 
@@ -497,8 +553,8 @@ public class AppFrame {
                             imagePanel.repaint();
                         } else if (selectedObjectControl == ObjectControl.RIGHT) {
                             float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
-                            float left = (to.x < originalLeft) ? (float) to.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
-                            float right = (to.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) to.x / scaledImage.getWidth(null);
+                            float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
+                            float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
                             detectedObjects.add(new DetectedObject(null, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                             updateObjectsPanel();
 
@@ -507,8 +563,8 @@ public class AppFrame {
                             imagePanel.repaint();
                         } else if (selectedObjectControl == ObjectControl.BOTTOM) {
                             float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
-                            float top = (to.y < originalTop) ? (float) to.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
-                            float bottom = (to.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) to.y / scaledImage.getHeight(null);
+                            float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
+                            float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
                             detectedObjects.add(new DetectedObject(null, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                             updateObjectsPanel();
 
@@ -593,6 +649,14 @@ public class AppFrame {
                     // left
                     {
                         int cx = Math.max(0, x - controlEdgeSize / 2);
+                        int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
+                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                        g.drawRect(cx, cy, cw, ch);
+                    }
+                    // center
+                    {
+                        int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
                         int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
                         int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
                         int ch = Math.min(controlEdgeSize, this.targetHeight - cy);

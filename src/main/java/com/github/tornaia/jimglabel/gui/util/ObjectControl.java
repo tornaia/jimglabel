@@ -5,6 +5,7 @@ public enum ObjectControl {
     TOP,
     TOP_RIGHT,
     LEFT,
+    MOVE,
     RIGHT,
     BOTTOM_LEFT,
     BOTTOM,
