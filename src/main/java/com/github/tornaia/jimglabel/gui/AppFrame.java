@@ -577,11 +577,6 @@ public class AppFrame {
                         selectedObjectControl = null;
                         mousePressedPoint = null;
                     }
-
-                    @Override
-                    public void mouseExited(MouseEvent e) {
-                        mouseReleased(e);
-                    }
                 });
             }
 
