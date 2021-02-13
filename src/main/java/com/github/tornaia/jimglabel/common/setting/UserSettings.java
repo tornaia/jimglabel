@@ -5,24 +5,34 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class UserSettings extends AbstractSettings {
 
-    private String directory;
+    private String sourceDirectory;
+    private String targetDirectory;
 
     public UserSettings() {
     }
 
-    public String getDirectory() {
-        return directory;
+    public String getSourceDirectory() {
+        return sourceDirectory;
     }
 
-    public void setDirectory(String directory) {
-        this.directory = directory;
+    public void setSourceDirectory(String sourceDirectory) {
+        this.sourceDirectory = sourceDirectory;
+    }
+
+    public String getTargetDirectory() {
+        return targetDirectory;
+    }
+
+    public void setTargetDirectory(String targetDirectory) {
+        this.targetDirectory = targetDirectory;
     }
 
     @Override
     public String toString() {
         return new ToStringBuilder("UserSettings", ToStringStyle.JSON_STYLE)
                 .append("UserSettings", "")
-                .append("directory", directory)
+                .append("sourceDirectory", sourceDirectory)
+                .append("targetDirectory", targetDirectory)
                 .toString();
     }
 }

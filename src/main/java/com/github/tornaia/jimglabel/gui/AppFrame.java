@@ -32,7 +32,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +53,7 @@ public class AppFrame {
     private final JFrame jFrame;
     private JPanel imagePanel;
     private JLabel sourceValue;
+    private JLabel targetValue;
     private JButton validateDirectoryButton;
     private JLabel fileValue;
     private JLabel resolutionValue;
@@ -111,20 +111,26 @@ public class AppFrame {
         // Create the menu bar.
         menuBar = new JMenuBar();
 
-        // Files
-        menu = new JMenu("Files");
+        // File
+        menu = new JMenu("File");
         menu.setMnemonic(KeyEvent.VK_F);
         menuBar.add(menu);
 
-        // Files > Open directory
-        menuItem = new JMenuItem("Open directory", KeyEvent.VK_O);
-        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.ALT_DOWN_MASK));
-        menuItem.addActionListener(e -> selectDirectory());
+        // File > Open source directory
+        menuItem = new JMenuItem("Open source directory", KeyEvent.VK_S);
+        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.ALT_DOWN_MASK));
+        menuItem.addActionListener(e -> selectSourceDirectory());
+        menu.add(menuItem);
+
+        // File > Open target directory
+        menuItem = new JMenuItem("Open target directory", KeyEvent.VK_T);
+        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.ALT_DOWN_MASK));
+        menuItem.addActionListener(e -> selectTargetDirectory());
         menu.add(menuItem);
 
         menu.addSeparator();
 
-        // Files > Exit
+        // File > Exit
         menuItem = new JMenuItem("Exit", KeyEvent.VK_X);
         menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.ALT_DOWN_MASK));
         menuItem.addActionListener(e -> applicationEventPublisher.exit());
@@ -138,15 +144,29 @@ public class AppFrame {
         return menuBar;
     }
 
-    private void selectDirectory() {
-        String directory = userSettingsProvider.read().getDirectory();
-        File fileChooserDirectory = directory != null && Files.isDirectory(Paths.get(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
+    private void selectSourceDirectory() {
+        String directory = userSettingsProvider.read().getSourceDirectory();
+        File fileChooserDirectory = directory != null && Files.isDirectory(Path.of(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
         JFileChooser directoryChooser = new JFileChooser(fileChooserDirectory);
         directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnValue = directoryChooser.showOpenDialog(jFrame);
         if (returnValue == JFileChooser.APPROVE_OPTION) {
             File selectedDirectory = directoryChooser.getSelectedFile();
-            userSettingsProvider.update(userSettings -> userSettings.setDirectory(selectedDirectory.getAbsolutePath()));
+            userSettingsProvider.update(userSettings -> userSettings.setSourceDirectory(selectedDirectory.getAbsolutePath()));
+        }
+        currentImageIndex = -1;
+        loadNextImage();
+    }
+
+    private void selectTargetDirectory() {
+        String directory = userSettingsProvider.read().getTargetDirectory();
+        File fileChooserDirectory = directory != null && Files.isDirectory(Path.of(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
+        JFileChooser directoryChooser = new JFileChooser(fileChooserDirectory);
+        directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        int returnValue = directoryChooser.showOpenDialog(jFrame);
+        if (returnValue == JFileChooser.APPROVE_OPTION) {
+            File selectedDirectory = directoryChooser.getSelectedFile();
+            userSettingsProvider.update(userSettings -> userSettings.setTargetDirectory(selectedDirectory.getAbsolutePath()));
         }
     }
 
@@ -161,6 +181,8 @@ public class AppFrame {
         JPanel top = new JPanel(new GridBagLayout());
         JLabel sourceLabel = new JLabel("Source");
         this.sourceValue = new JLabel();
+        JLabel targetLabel = new JLabel("Target");
+        this.targetValue = new JLabel();
         JLabel fileLabel = new JLabel("File");
         this.fileValue = new JLabel();
         JLabel resolutionLabel = new JLabel("Resolution");
@@ -169,6 +191,8 @@ public class AppFrame {
         this.sizeValue = new JLabel();
         top.add(sourceLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(sourceValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(targetLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.validateDirectoryButton = new JButton("Validate");
         validateDirectoryButton.setMnemonic('V');
@@ -176,14 +200,14 @@ public class AppFrame {
         validateDirectoryButton.addActionListener(e -> validateDirectory());
         validateDirectoryButton.registerKeyboardAction(e -> validateDirectory(), KeyStroke.getKeyStroke(KeyEvent.VK_V, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         validateDirectoryButton.setEnabled(false);
-        top.add(validateDirectoryButton, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-        top.add(new JSeparator(), new GridBagConstraints(0, 2, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
-        top.add(fileLabel, new GridBagConstraints(0, 2, 3, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-        top.add(fileValue, new GridBagConstraints(1, 2, 3, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
-        top.add(resolutionLabel, new GridBagConstraints(0, 4, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(resolutionValue, new GridBagConstraints(1, 4, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
-        top.add(sizeLabel, new GridBagConstraints(0, 5, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(sizeValue, new GridBagConstraints(1, 5, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(validateDirectoryButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(new JSeparator(), new GridBagConstraints(0, 3, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
+        top.add(fileLabel, new GridBagConstraints(0, 2, 4, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(fileValue, new GridBagConstraints(1, 2, 4, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
+        top.add(resolutionLabel, new GridBagConstraints(0, 5, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(resolutionValue, new GridBagConstraints(1, 5, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(sizeLabel, new GridBagConstraints(0, 6, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(sizeValue, new GridBagConstraints(1, 6, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.deleteImageButton = new JButton("Delete");
         deleteImageButton.setMnemonic('D');
@@ -191,11 +215,11 @@ public class AppFrame {
         deleteImageButton.addActionListener(e -> deleteImage());
         deleteImageButton.registerKeyboardAction(e -> deleteImage(), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         deleteImageButton.setEnabled(false);
-        top.add(deleteImageButton, new GridBagConstraints(0, 6, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-        top.add(new JSeparator(), new GridBagConstraints(0, 7, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
+        top.add(deleteImageButton, new GridBagConstraints(0, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(new JSeparator(), new GridBagConstraints(0, 8, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
 
         JLabel detectedObjectsLabel = new JLabel("Detected object(s)");
-        top.add(detectedObjectsLabel, new GridBagConstraints(0, 8, 2, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(detectedObjectsLabel, new GridBagConstraints(0, 9, 2, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
         // objects
         objectsScrollPanel = new JScrollPane(new JPanel());
@@ -276,9 +300,9 @@ public class AppFrame {
     }
 
     private void deleteImage() {
-        String directory = userSettingsProvider.read().getDirectory();
+        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
         try {
-            Files.delete(Paths.get(directory).resolve(currentImageFileName));
+            Files.delete(Path.of(sourceDirectory).resolve(currentImageFileName));
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
@@ -314,24 +338,29 @@ public class AppFrame {
         this.currentImageHeight = 0;
         this.detectedObjects = null;
 
-        String directory = userSettingsProvider.read().getDirectory();
-        if (directory == null) {
+        String targetDirectory = userSettingsProvider.read().getTargetDirectory();
+        if (targetDirectory == null) {
+            targetValue.setText("<Select directory: ALT+T>");
+        }
+
+        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
+        if (sourceDirectory == null) {
             this.currentImageIndex = -1;
-            sourceValue.setText("<Select directory: ALT+O>");
+            sourceValue.setText("<Select directory: ALT+S>");
             return;
         }
 
-        Path directoryFile = Paths.get(directory);
-        boolean directoryExist = Files.isDirectory(directoryFile);
-        String directoryAbsolutePath = directoryFile.toAbsolutePath().toString();
-        if (!directoryExist) {
-            sourceValue.setText(directoryAbsolutePath + " not found");
+        Path sourceDirectoryFile = Path.of(sourceDirectory);
+        boolean sourceDirectoryExist = Files.isDirectory(sourceDirectoryFile);
+        String sourceDirectoryAbsolutePath = sourceDirectoryFile.toAbsolutePath().toString();
+        if (!sourceDirectoryExist) {
+            sourceValue.setText(sourceDirectoryAbsolutePath + " not found");
             return;
         }
 
         List<String> imageFileNames;
         try {
-            imageFileNames = Files.list(Paths.get(directory))
+            imageFileNames = Files.list(Path.of(sourceDirectory))
                     .map(Path::getFileName)
                     .map(Path::toString)
                     .filter(e -> e.toLowerCase(Locale.ENGLISH).endsWith(".png") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpg") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpeg"))
@@ -340,7 +369,7 @@ public class AppFrame {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        sourceValue.setText(directoryAbsolutePath + " (" + imageFileNames.size() + " files)");
+        sourceValue.setText(sourceDirectoryAbsolutePath + " (" + imageFileNames.size() + " files)");
 
         if (imageFileNames.isEmpty()) {
             this.currentImageIndex = -1;
@@ -359,7 +388,7 @@ public class AppFrame {
 
         jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, (currentImageIndex + 1), imageFileNames.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
-        Path currentImage = Paths.get(directory).resolve(currentImageFileName);
+        Path currentImage = Path.of(sourceDirectory).resolve(currentImageFileName);
         byte[] currentImageBytes;
         try {
             currentImageBytes = Files.readAllBytes(currentImage);
@@ -906,9 +935,9 @@ public class AppFrame {
     }
 
     private Path getAnnotationFile() {
-        String directory = userSettingsProvider.read().getDirectory();
+        String directory = userSettingsProvider.read().getSourceDirectory();
         String annotationFileName = this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json";
-        return Paths.get(directory).resolve(annotationFileName);
+        return Path.of(directory).resolve(annotationFileName);
     }
 
     private DetectedObject getSelectedObject(Image scaledImage, Point point) {
