@@ -800,8 +800,6 @@ public class AppFrame {
         if (objectClassComboBox != null) {
             objectClassComboBox.requestFocusInWindow();
         }
-
-        updateAnnotationFile();
     }
 
     private void updateAnnotationFile() {
