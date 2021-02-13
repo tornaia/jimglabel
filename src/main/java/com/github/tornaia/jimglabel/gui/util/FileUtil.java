@@ -2,7 +2,10 @@ package com.github.tornaia.jimglabel.gui.util;
 
 import java.text.DecimalFormat;
 
-public class FileUtil {
+public final class FileUtil {
+
+    private FileUtil() {
+    }
 
     public static String readableFileSize(long size) {
         if (size < 0) {

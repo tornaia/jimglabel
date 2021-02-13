@@ -8,9 +8,12 @@ import com.github.tornaia.jimglabel.common.util.UIUtils;
 import com.github.tornaia.jimglabel.gui.component.AutoCompleteComboBox;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
+import com.github.tornaia.jimglabel.gui.util.ClassUtil;
 import com.github.tornaia.jimglabel.gui.util.DetectedObjectUtil;
 import com.github.tornaia.jimglabel.gui.util.FileUtil;
 import com.github.tornaia.jimglabel.gui.util.ObjectControl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -30,15 +33,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Component
 public class AppFrame {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AppFrame.class);
 
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserSettingsProvider userSettingsProvider;
@@ -316,6 +322,23 @@ public class AppFrame {
         this.currentImageHeight = bufferedImage.getHeight();
 
         imagePanel.removeAll();
+
+        Path annotationFile = getAnnotationFile();
+        boolean hasAnnotationFile = Files.isRegularFile(annotationFile);
+        Annotation annotation;
+        if (hasAnnotationFile) {
+            String annotationContent;
+            try {
+                annotationContent = Files.readString(annotationFile);
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
+            }
+
+            annotation = serializerUtils.toObject(annotationContent, Annotation.class);
+        } else {
+            annotation = new Annotation(currentImageFileName, currentImageBytes.length, currentImageWidth, currentImageHeight, new ArrayList<>());
+        }
+        this.detectedObjects = annotation.getObjects();
 
         JPanel image = new JPanel() {
 
@@ -717,27 +740,11 @@ public class AppFrame {
         sizeValue.setText(FileUtil.readableFileSize(currentImageBytes.length));
         deleteImageButton.setEnabled(true);
 
-        Path annotationFile = Paths.get(directory + currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".json");
-        boolean hasAnnotationFile = Files.isRegularFile(annotationFile);
-        Annotation annotation;
-        if (hasAnnotationFile) {
-            byte[] annotationBytes;
-            try {
-                annotationBytes = Files.readAllBytes(annotationFile);
-            } catch (IOException e) {
-                throw new IllegalStateException("Must not happen", e);
-            }
-            annotation = serializerUtils.toObject(new ByteArrayInputStream(annotationBytes), Annotation.class);
-        } else {
-            annotation = new Annotation(currentImageFileName, currentImageBytes.length, currentImageWidth, currentImageHeight, new ArrayList<>());
-        }
-        this.detectedObjects = annotation.objects();
-
         updateObjectsPanel();
     }
 
     private void updateObjectsPanel() {
-        List<String> classList = getObjectClasses();
+        List<String> classList = ClassUtil.getClasses();
 
         JPanel nestedObjectsPanel = new JPanel();
         nestedObjectsPanel.setLayout(new BoxLayout(nestedObjectsPanel, BoxLayout.Y_AXIS));
@@ -756,7 +763,10 @@ public class AppFrame {
                 JComboBox<?> source = (JComboBox<?>) e.getSource();
                 String selectedItem = (String) source.getSelectedItem();
                 selectedItem = classList.contains(selectedItem) ? selectedItem : null;
-                detectedObject.setName(selectedItem);
+                boolean changed = !Objects.equals(selectedItem, detectedObject.getName());
+                if (changed) { detectedObject.setName(selectedItem);
+                    AppFrame.this.updateAnnotationFile();
+                }
             });
             objectClassComboBox.setSelectedIndex(classList.indexOf(detectedObject.getName()));
             objectPanel.add(objectClassComboBox, new GridBagConstraints(1, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
@@ -790,6 +800,36 @@ public class AppFrame {
         if (objectClassComboBox != null) {
             objectClassComboBox.requestFocusInWindow();
         }
+
+        updateAnnotationFile();
+    }
+
+    private void updateAnnotationFile() {
+        Path annotationFile = getAnnotationFile();
+        long size = 0;
+        if (Files.isRegularFile(annotationFile)) {
+            try {
+                size = Files.size(annotationFile);
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
+            }
+        }
+
+        String annotationFileName = annotationFile.getFileName().toString();
+        Annotation annotation = new Annotation(annotationFileName, size, currentImageWidth, currentImageHeight, detectedObjects);
+        String annotationFileContent = serializerUtils.toJSON(annotation);
+        try {
+            Files.writeString(annotationFile, annotationFileContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
+        } catch (IOException e) {
+            throw new IllegalStateException("Must not happen", e);
+        }
+        LOG.info("Annotation file updated: {}, length: {}", annotationFile, annotation.getObjects());
+    }
+
+    private Path getAnnotationFile() {
+        String directory = userSettingsProvider.read().getDirectory();
+        String annotationFileName = this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json";
+        return Paths.get(directory).resolve(annotationFileName);
     }
 
     private DetectedObject getSelectedObject(Image scaledImage, Point point) {
@@ -803,9 +843,6 @@ public class AppFrame {
         return selectedObject;
     }
 
-    private List<String> getObjectClasses() {
-        return Arrays.asList("Ilanori bárd (0459)", "Krad-paplovag (00462)", "Orwella-papnő (0556)");
-    }
 
     private void bringFrameToFront() {
         jFrame.setState(JFrame.NORMAL);
