@@ -397,6 +397,7 @@ public class AppFrame {
 
         JPanel image = new JPanel() {
 
+            private final AtomicReference<Point> currentPoint = new AtomicReference<>();
             private final AtomicReference<Point> drawFrom = new AtomicReference<>();
             private final AtomicReference<Point> drawTo = new AtomicReference<>();
             private int targetWidth;
@@ -411,6 +412,8 @@ public class AppFrame {
                 this.addMouseMotionListener(new MouseMotionAdapter() {
                     @Override
                     public void mouseDragged(MouseEvent e) {
+                        currentPoint.set(e.getPoint());
+
                         if (selectedObjectControl != null) {
                             detectedObjects.remove(AppFrame.this.selectedObject);
                             if (selectedObjectControl == ObjectControl.TOP_LEFT ||
@@ -514,6 +517,7 @@ public class AppFrame {
                     @Override
                     public void mouseMoved(MouseEvent e) {
                         Point point = e.getPoint();
+
                         DetectedObject selectedObject = getSelectedObject(scaledImage, point);
 
                         if (selectedObject != null) {
@@ -541,6 +545,10 @@ public class AppFrame {
                         } else {
                             enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
                         }
+
+                        // x-y-cross
+                        currentPoint.set(point);
+                        imagePanel.repaint();
                     }
                 });
                 this.addMouseListener(new MouseAdapter() {
@@ -657,6 +665,12 @@ public class AppFrame {
                         mousePressedPoint = null;
 
                         updateAnnotationFile();
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent mouseEvent) {
+                        currentPoint.set(null);
+                        imagePanel.repaint();
                     }
                 });
             }
@@ -775,20 +789,27 @@ public class AppFrame {
                 // new rectangle
                 Point from = drawFrom.get();
                 Point to = drawTo.get();
-                if (from == null || to == null) {
-                    return;
+                if (from != null && to != null) {
+                    int fromX = from.x;
+                    int fromY = from.y;
+                    int toX = to.x;
+                    int toY = to.y;
+                    int x = Math.min(fromX, toX);
+                    int y = Math.min(fromY, toY);
+                    int width = Math.abs(toX - fromX);
+                    int height = Math.abs(toY - fromY);
+                    g.setColor(new Color(0, 72, 186));
+                    g.drawRect(x, y, width, height);
                 }
 
-                int fromX = from.x;
-                int fromY = from.y;
-                int toX = to.x;
-                int toY = to.y;
-                int x = Math.min(fromX, toX);
-                int y = Math.min(fromY, toY);
-                int width = Math.abs(toX - fromX);
-                int height = Math.abs(toY - fromY);
-                g.setColor(new Color(0, 72, 186));
-                g.drawRect(x, y, width, height);
+                // x-y-cross
+                Point cp = currentPoint.get();
+                boolean drawCurrentPoint = cp != null;
+                if (drawCurrentPoint) {
+                    g.setColor(Color.RED);
+                    g.drawLine(0, (int) cp.getY(), this.scaledImage.getWidth(null), (int) cp.getY());
+                    g.drawLine((int) cp.getX(), 0, (int) cp.getX(), this.scaledImage.getHeight(null));
+                }
             }
         };
         imagePanel.add(image);
