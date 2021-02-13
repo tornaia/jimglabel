@@ -54,6 +54,7 @@ public class AppFrame {
     private final JFrame jFrame;
     private JPanel imagePanel;
     private JLabel directoryValue;
+    private JButton validateDirectoryButton;
     private JLabel fileValue;
     private JLabel resolutionValue;
     private JLabel sizeValue;
@@ -168,25 +169,33 @@ public class AppFrame {
         this.sizeValue = new JLabel();
         top.add(directoryLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(directoryValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
-        top.add(fileLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-        top.add(fileValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
-        top.add(resolutionLabel, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(resolutionValue, new GridBagConstraints(1, 2, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
-        top.add(sizeLabel, new GridBagConstraints(0, 3, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(sizeValue, new GridBagConstraints(1, 3, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+
+        this.validateDirectoryButton = new JButton("Validate");
+        validateDirectoryButton.setMnemonic('V');
+        validateDirectoryButton.setToolTipText("Validate images");
+        validateDirectoryButton.addActionListener(e -> validateDirectory());
+        validateDirectoryButton.registerKeyboardAction(e -> validateDirectory(), KeyStroke.getKeyStroke(KeyEvent.VK_V, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        validateDirectoryButton.setEnabled(false);
+        top.add(validateDirectoryButton, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(new JSeparator(), new GridBagConstraints(0, 2, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
+        top.add(fileLabel, new GridBagConstraints(0, 2, 3, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(fileValue, new GridBagConstraints(1, 2, 3, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
+        top.add(resolutionLabel, new GridBagConstraints(0, 4, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(resolutionValue, new GridBagConstraints(1, 4, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(sizeLabel, new GridBagConstraints(0, 5, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(sizeValue, new GridBagConstraints(1, 5, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.deleteImageButton = new JButton("Delete");
         deleteImageButton.setMnemonic('D');
         deleteImageButton.setToolTipText("Delete image");
+        deleteImageButton.addActionListener(e -> deleteImage());
         deleteImageButton.registerKeyboardAction(e -> deleteImage(), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         deleteImageButton.setEnabled(false);
-        top.add(deleteImageButton, new GridBagConstraints(0, 4, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-
-        JSeparator separator = new JSeparator();
-        top.add(separator, new GridBagConstraints(0, 5, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
+        top.add(deleteImageButton, new GridBagConstraints(0, 6, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        top.add(new JSeparator(), new GridBagConstraints(0, 7, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
 
         JLabel detectedObjectsLabel = new JLabel("Detected object(s)");
-        top.add(detectedObjectsLabel, new GridBagConstraints(0, 6, 2, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(detectedObjectsLabel, new GridBagConstraints(0, 8, 2, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
         // objects
         objectsScrollPanel = new JScrollPane(new JPanel());
@@ -233,6 +242,39 @@ public class AppFrame {
         return detailsPanel;
     }
 
+    private void validateDirectory() {
+        if (currentImageIndex == -1) {
+            loadNextImage();
+        }
+
+        if (currentImageIndex == -1) {
+            return;
+        }
+
+        int startedAt = currentImageIndex;
+        while (true) {
+            boolean noObject = detectedObjects.isEmpty();
+            if (noObject) {
+                JOptionPane.showMessageDialog(jFrame, "No object found on this image");
+                return;
+            }
+
+            boolean missingName = detectedObjects
+                    .stream()
+                    .anyMatch(e -> Objects.isNull(e.getName()));
+            if (missingName) {
+                JOptionPane.showMessageDialog(jFrame, "Missing name for object");
+                return;
+            }
+
+            loadNextImage();
+
+            if (startedAt == currentImageIndex) {
+                return;
+            }
+        }
+    }
+
     private void deleteImage() {
         String directory = userSettingsProvider.read().getDirectory();
         try {
@@ -264,6 +306,7 @@ public class AppFrame {
     }
 
     private void loadImage() {
+        validateDirectoryButton.setEnabled(false);
         deleteImageButton.setEnabled(false);
 
         this.currentImageWidth = 0;
@@ -274,6 +317,7 @@ public class AppFrame {
         directoryValue.setText(directory == null ? "<Select directory: ALT+O>" : Paths.get(directory).toAbsolutePath().toString());
 
         if (directory == null) {
+            this.currentImageIndex = -1;
             return;
         }
 
@@ -289,6 +333,7 @@ public class AppFrame {
         }
 
         if (imageFileNames.isEmpty()) {
+            this.currentImageIndex = -1;
             return;
         }
 
@@ -513,6 +558,7 @@ public class AppFrame {
 
                         Point from = drawFrom.get();
                         Point to = drawTo.get();
+                        String name = selectedObject != null ? selectedObject.getName() : null;
 
                         if (selectedObjectControl == null ||
                                 selectedObjectControl == ObjectControl.TOP_LEFT ||
@@ -532,7 +578,7 @@ public class AppFrame {
                                 float right = (float) (x + width) / scaledImageWidth;
                                 float bottom = (float) (y + height) / scaledImageHeight;
                                 float left = (float) x / scaledImageWidth;
-                                detectedObjects.add(new DetectedObject(null, top, right, bottom, left));
+                                detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
                                 updateObjectsPanel();
 
                                 drawFrom.set(null);
@@ -548,7 +594,7 @@ public class AppFrame {
                             float right = (float) toX / scaledImageWidth;
                             float bottom = (float) toY / scaledImageHeight;
                             float left = (float) fromX / scaledImageWidth;
-                            detectedObjects.add(new DetectedObject(null, top, right, bottom, left));
+                            detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
                             updateObjectsPanel();
 
                             drawFrom.set(null);
@@ -558,7 +604,7 @@ public class AppFrame {
                             float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
                             float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
                             float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                            detectedObjects.add(new DetectedObject(null, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                            detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                             updateObjectsPanel();
 
                             drawFrom.set(null);
@@ -568,7 +614,7 @@ public class AppFrame {
                             float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
                             float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
                             float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                            detectedObjects.add(new DetectedObject(null, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                            detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                             updateObjectsPanel();
 
                             drawFrom.set(null);
@@ -578,7 +624,7 @@ public class AppFrame {
                             float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
                             float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
                             float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                            detectedObjects.add(new DetectedObject(null, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                            detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                             updateObjectsPanel();
 
                             drawFrom.set(null);
@@ -588,7 +634,7 @@ public class AppFrame {
                             float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
                             float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
                             float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                            detectedObjects.add(new DetectedObject(null, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                            detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                             updateObjectsPanel();
 
                             drawFrom.set(null);
@@ -739,6 +785,7 @@ public class AppFrame {
         resolutionValue.setText(String.format("%s x %s", currentImageWidth, currentImageHeight));
         sizeValue.setText(FileUtil.readableFileSize(currentImageBytes.length));
         deleteImageButton.setEnabled(true);
+        validateDirectoryButton.setEnabled(true);
 
         updateObjectsPanel();
     }
@@ -764,7 +811,8 @@ public class AppFrame {
                 String selectedItem = (String) source.getSelectedItem();
                 selectedItem = classList.contains(selectedItem) ? selectedItem : null;
                 boolean changed = !Objects.equals(selectedItem, detectedObject.getName());
-                if (changed) { detectedObject.setName(selectedItem);
+                if (changed) {
+                    detectedObject.setName(selectedItem);
                     AppFrame.this.updateAnnotationFile();
                 }
             });
