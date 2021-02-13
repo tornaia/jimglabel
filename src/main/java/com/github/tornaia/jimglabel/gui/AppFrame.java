@@ -53,7 +53,7 @@ public class AppFrame {
 
     private final JFrame jFrame;
     private JPanel imagePanel;
-    private JLabel directoryValue;
+    private JLabel sourceValue;
     private JButton validateDirectoryButton;
     private JLabel fileValue;
     private JLabel resolutionValue;
@@ -157,18 +157,18 @@ public class AppFrame {
     }
 
     private JPanel createDetailsPanel() {
-        // directory, file
+        // source, file
         JPanel top = new JPanel(new GridBagLayout());
-        JLabel directoryLabel = new JLabel("Directory");
-        this.directoryValue = new JLabel();
+        JLabel sourceLabel = new JLabel("Source");
+        this.sourceValue = new JLabel();
         JLabel fileLabel = new JLabel("File");
         this.fileValue = new JLabel();
         JLabel resolutionLabel = new JLabel("Resolution");
         this.resolutionValue = new JLabel();
         JLabel sizeLabel = new JLabel("Size");
         this.sizeValue = new JLabel();
-        top.add(directoryLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(directoryValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(sourceLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(sourceValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.validateDirectoryButton = new JButton("Validate");
         validateDirectoryButton.setMnemonic('V');
@@ -315,10 +315,17 @@ public class AppFrame {
         this.detectedObjects = null;
 
         String directory = userSettingsProvider.read().getDirectory();
-        directoryValue.setText(directory == null ? "<Select directory: ALT+O>" : Paths.get(directory).toAbsolutePath().toString());
-
         if (directory == null) {
             this.currentImageIndex = -1;
+            sourceValue.setText("<Select directory: ALT+O>");
+            return;
+        }
+
+        Path directoryFile = Paths.get(directory);
+        boolean directoryExist = Files.isDirectory(directoryFile);
+        String directoryAbsolutePath = directoryFile.toAbsolutePath().toString();
+        if (!directoryExist) {
+            sourceValue.setText(directoryAbsolutePath + " not found");
             return;
         }
 
@@ -332,6 +339,8 @@ public class AppFrame {
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
+
+        sourceValue.setText(directoryAbsolutePath + " (" + imageFileNames.size() + " files)");
 
         if (imageFileNames.isEmpty()) {
             this.currentImageIndex = -1;
