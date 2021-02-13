@@ -168,6 +168,7 @@ public class AppFrame {
             File selectedDirectory = directoryChooser.getSelectedFile();
             userSettingsProvider.update(userSettings -> userSettings.setTargetDirectory(selectedDirectory.getAbsolutePath()));
         }
+        loadImage();
     }
 
     private JPanel createImagePanel() {
@@ -341,6 +342,15 @@ public class AppFrame {
         String targetDirectory = userSettingsProvider.read().getTargetDirectory();
         if (targetDirectory == null) {
             targetValue.setText("<Select directory: ALT+T>");
+        } else {
+            Path targetDirectoryFile = Path.of(targetDirectory);
+            boolean targetDirectoryExist = Files.isDirectory(targetDirectoryFile);
+            String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
+            if (targetDirectoryExist) {
+                targetValue.setText(targetDirectoryAbsolutePath);
+            } else {
+                targetValue.setText(targetDirectoryAbsolutePath + " not found");
+            }
         }
 
         String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
