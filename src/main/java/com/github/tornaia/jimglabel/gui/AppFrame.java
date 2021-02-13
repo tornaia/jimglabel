@@ -297,6 +297,7 @@ public class AppFrame {
     private void resetImage() {
         detectedObjects.clear();
         updateObjectsPanel();
+        updateAnnotationFile();
         imagePanel.repaint();
     }
 
@@ -645,6 +646,8 @@ public class AppFrame {
                         selectedObject = null;
                         selectedObjectControl = null;
                         mousePressedPoint = null;
+
+                        updateAnnotationFile();
                     }
                 });
             }
