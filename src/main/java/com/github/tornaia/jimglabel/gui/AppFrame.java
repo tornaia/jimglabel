@@ -21,6 +21,8 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileSystemView;
 import java.awt.*;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -561,26 +563,27 @@ public class AppFrame {
                     public void mouseMoved(MouseEvent e) {
                         Point point = e.getPoint();
 
-                        DetectedObject selectedObject = getSelectedObject(scaledImage, point);
+                        DetectedObject objectAtPoint = getObjectAtPoint(scaledImage, point);
 
-                        if (selectedObject != null) {
-                            if (DetectedObjectUtil.isTopLeftControl(scaledImage, selectedObject, point)) {
+                        if (objectAtPoint != null) {
+                            boolean objectAtPointIsTheSelectedObject = objectAtPoint.equals(AppFrame.this.selectedObject);
+                            if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopLeftControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isTopControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isTopRightControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopRightControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isLeftControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isLeftControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isMoveControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isMoveControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-                            } else if (DetectedObjectUtil.isRightControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isRightControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isBottomLeftControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomLeftControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.SW_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isBottomControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR));
-                            } else if (DetectedObjectUtil.isBottomRightControl(scaledImage, selectedObject, point)) {
+                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomRightControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR));
                             } else {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
@@ -607,12 +610,14 @@ public class AppFrame {
                         if (optionalDetectedObject.isPresent()) {
                             List<DetectedObject> detectedObjects = AppFrame.this.detectedObjects;
                             DetectedObject selectedObject = optionalDetectedObject.get();
+                            AppFrame.this.selectedObject = selectedObject;
                             int itemIndex = detectedObjects.indexOf(selectedObject);
                             if (itemIndex == -1) {
                                 throw new IllegalStateException("Must not happen");
                             }
                             AutoCompleteComboBox autoCompleteComboBox = AppFrame.this.autoCompleteComboBoxes.get(itemIndex);
                             autoCompleteComboBox.requestFocus();
+                            imagePanel.repaint();
                         }
                     }
 
@@ -620,7 +625,7 @@ public class AppFrame {
                     public void mousePressed(MouseEvent e) {
                         Point point = e.getPoint();
 
-                        DetectedObject selectedObject = getSelectedObject(scaledImage, point);
+                        DetectedObject selectedObject = getObjectAtPoint(scaledImage, point);
                         AppFrame.this.selectedObject = selectedObject;
                         AppFrame.this.selectedObjectControl = DetectedObjectUtil.getSelectedObjectControl(scaledImage, selectedObject, point);
                         AppFrame.this.mousePressedPoint = point;
@@ -673,60 +678,70 @@ public class AppFrame {
                                 imagePanel.repaint();
                             }
                         } else if (selectedObjectControl == ObjectControl.MOVE) {
-                            int fromX = from.x;
-                            int fromY = from.y;
-                            int toX = to.x;
-                            int toY = to.y;
-                            float top = (float) fromY / scaledImageHeight;
-                            float right = (float) toX / scaledImageWidth;
-                            float bottom = (float) toY / scaledImageHeight;
-                            float left = (float) fromX / scaledImageWidth;
-                            detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
-                            updateObjectsPanel();
+                            if (from != null) {
+                                int fromX = from.x;
+                                int fromY = from.y;
+                                int toX = to.x;
+                                int toY = to.y;
+                                float top = (float) fromY / scaledImageHeight;
+                                float right = (float) toX / scaledImageWidth;
+                                float bottom = (float) toY / scaledImageHeight;
+                                float left = (float) fromX / scaledImageWidth;
+                                detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
+                                updateObjectsPanel();
 
-                            drawFrom.set(null);
-                            drawTo.set(null);
-                            imagePanel.repaint();
+                                drawFrom.set(null);
+                                drawTo.set(null);
+                                imagePanel.repaint();
+                            }
                         } else if (selectedObjectControl == ObjectControl.TOP) {
-                            float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
-                            float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
-                            float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                            detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
-                            updateObjectsPanel();
+                            if (from != null) {
+                                float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
+                                float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
+                                float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
+                                detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                                updateObjectsPanel();
 
-                            drawFrom.set(null);
-                            drawTo.set(null);
-                            imagePanel.repaint();
+                                drawFrom.set(null);
+                                drawTo.set(null);
+                                imagePanel.repaint();
+                            }
                         } else if (selectedObjectControl == ObjectControl.LEFT) {
-                            float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
-                            float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
-                            float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                            detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
-                            updateObjectsPanel();
+                            if (from != null) {
+                                float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
+                                float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
+                                float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
+                                detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                                updateObjectsPanel();
 
-                            drawFrom.set(null);
-                            drawTo.set(null);
-                            imagePanel.repaint();
+                                drawFrom.set(null);
+                                drawTo.set(null);
+                                imagePanel.repaint();
+                            }
                         } else if (selectedObjectControl == ObjectControl.RIGHT) {
-                            float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
-                            float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
-                            float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                            detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
-                            updateObjectsPanel();
+                            if (from != null) {
+                                float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
+                                float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
+                                float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
+                                detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                                updateObjectsPanel();
 
-                            drawFrom.set(null);
-                            drawTo.set(null);
-                            imagePanel.repaint();
+                                drawFrom.set(null);
+                                drawTo.set(null);
+                                imagePanel.repaint();
+                            }
                         } else if (selectedObjectControl == ObjectControl.BOTTOM) {
-                            float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
-                            float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
-                            float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                            detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
-                            updateObjectsPanel();
+                            if (from != null) {
+                                float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
+                                float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
+                                float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
+                                detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                                updateObjectsPanel();
 
-                            drawFrom.set(null);
-                            drawTo.set(null);
-                            imagePanel.repaint();
+                                drawFrom.set(null);
+                                drawTo.set(null);
+                                imagePanel.repaint();
+                            }
                         }
 
                         selectedObject = null;
@@ -776,82 +791,86 @@ public class AppFrame {
                     int y = (int) (this.targetHeight * top);
                     int width = (int) (this.targetWidth * (right - left));
                     int height = (int) (this.targetHeight * (bottom - top));
-                    g.setColor(new Color(205, 92, 92));
+                    boolean currentlySelectedObject = e == AppFrame.this.selectedObject;
+                    Color color = currentlySelectedObject ? Color.RED : Color.GRAY;
+                    g.setColor(color);
                     g.drawRect(x, y, width, height);
 
-                    // draw controls for corners and edges: top-left, top, top-right, left, right, bottom-left, bottom, bottom-right
-                    int controlEdgeSize = DetectedObjectUtil.CONTROL_SIZE_RADIUS * 2 + 1;
-                    // top-left
-                    {
-                        int cx = Math.max(0, x - controlEdgeSize / 2);
-                        int cy = Math.max(0, y - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // top
-                    {
-                        int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                        int cy = Math.max(0, y - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // top-right
-                    {
-                        int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                        int cy = Math.max(0, y - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // left
-                    {
-                        int cx = Math.max(0, x - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // center
-                    {
-                        int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // right
-                    {
-                        int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // bottom-left
-                    {
-                        int cx = Math.max(0, x - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // bottom
-                    {
-                        int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
-                    }
-                    // bottom-right
-                    {
-                        int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                        int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                        int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                        int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                        g.drawRect(cx, cy, cw, ch);
+                    if (currentlySelectedObject) {
+                        // draw controls for corners and edges: top-left, top, top-right, left, right, bottom-left, bottom, bottom-right
+                        int controlEdgeSize = DetectedObjectUtil.CONTROL_SIZE_RADIUS * 2 + 1;
+                        // top-left
+                        {
+                            int cx = Math.max(0, x - controlEdgeSize / 2);
+                            int cy = Math.max(0, y - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // top
+                        {
+                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
+                            int cy = Math.max(0, y - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // top-right
+                        {
+                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
+                            int cy = Math.max(0, y - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // left
+                        {
+                            int cx = Math.max(0, x - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // center
+                        {
+                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // right
+                        {
+                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // bottom-left
+                        {
+                            int cx = Math.max(0, x - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // bottom
+                        {
+                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
+                        // bottom-right
+                        {
+                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
+                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
+                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
+                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
+                            g.drawRect(cx, cy, cw, ch);
+                        }
                     }
                 });
 
@@ -908,6 +927,20 @@ public class AppFrame {
             objectPanel.add(indexLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
             objectClassComboBox = new AutoCompleteComboBox(classList.toArray(new String[0]));
+            objectClassComboBox.getEditor().getEditorComponent().addFocusListener(new FocusListener() {
+                @Override
+                public void focusGained(FocusEvent e) {
+                    selectedObject = detectedObject;
+                    imagePanel.repaint();
+                }
+
+                @Override
+                public void focusLost(FocusEvent e) {
+                    selectedObject = null;
+                    imagePanel.repaint();
+                }
+            });
+
             this.autoCompleteComboBoxes.add(objectClassComboBox);
             objectClassComboBox.addActionListener(e -> {
                 JComboBox<?> source = (JComboBox<?>) e.getSource();
@@ -1003,7 +1036,7 @@ public class AppFrame {
                 .findFirst();
     }
 
-    private DetectedObject getSelectedObject(Image scaledImage, Point point) {
+    private DetectedObject getObjectAtPoint(Image scaledImage, Point point) {
         DetectedObject selectedObject = null;
         for (DetectedObject object : detectedObjects) {
             boolean selected = DetectedObjectUtil.isSelected(scaledImage, object, point);
