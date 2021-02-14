@@ -585,7 +585,7 @@ public class AppFrame {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR));
                             } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomRightControl(scaledImage, objectAtPoint, point)) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR));
-                            } else {
+                            } else if (objectAtPointIsTheSelectedObject) {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
                             }
                         } else {
@@ -783,6 +783,7 @@ public class AppFrame {
 
                 // object rectangles
                 AppFrame.this.detectedObjects.forEach(e -> {
+                    Point cp = currentPoint.get();
                     float top = e.getTop();
                     float right = e.getRight();
                     float bottom = e.getBottom();
@@ -791,12 +792,13 @@ public class AppFrame {
                     int y = (int) (this.targetHeight * top);
                     int width = (int) (this.targetWidth * (right - left));
                     int height = (int) (this.targetHeight * (bottom - top));
-                    boolean currentlySelectedObject = e == AppFrame.this.selectedObject;
-                    Color color = currentlySelectedObject ? Color.RED : Color.GRAY;
+                    boolean currentObjectIsSelected = e == AppFrame.this.selectedObject;
+                    boolean currentObjectIsUnderMouse = cp != null && e.equals(getObject(scaledImage, cp).orElse(null));
+                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(205, 92, 92) : Color.LIGHT_GRAY;
                     g.setColor(color);
                     g.drawRect(x, y, width, height);
 
-                    if (currentlySelectedObject) {
+                    if (currentObjectIsSelected) {
                         // draw controls for corners and edges: top-left, top, top-right, left, right, bottom-left, bottom, bottom-right
                         int controlEdgeSize = DetectedObjectUtil.CONTROL_SIZE_RADIUS * 2 + 1;
                         // top-left
@@ -891,7 +893,7 @@ public class AppFrame {
                     g.drawRect(x, y, width, height);
                 } else if (cp != null) {
                     // x-y-cross
-                    g.setColor(Color.RED);
+                    g.setColor(new Color(255, 8, 0));
                     g.drawLine(0, (int) cp.getY(), this.scaledImage.getWidth(null), (int) cp.getY());
                     g.drawLine((int) cp.getX(), 0, (int) cp.getX(), this.scaledImage.getHeight(null));
                 }
