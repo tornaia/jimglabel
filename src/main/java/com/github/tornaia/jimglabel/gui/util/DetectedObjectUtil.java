@@ -169,6 +169,22 @@ public final class DetectedObjectUtil {
         return Math.hypot(px - x1, py - y1) < CONTROL_SIZE_RADIUS2;
     }
 
+    public static boolean isObjectArea(Image scaledImage, DetectedObject object, Point point) {
+        double px = point.x;
+        double py = point.y;
+
+        float top = object.getTop();
+        float right = object.getRight();
+        float bottom = object.getBottom();
+        float left = object.getLeft();
+        float x0 = scaledImage.getWidth(null) * left;
+        float y0 = scaledImage.getHeight(null) * top;
+        float x1 = scaledImage.getWidth(null) * right;
+        float y1 = scaledImage.getHeight(null) * bottom;
+
+        return px > x0 && px < x1 && py > y0 && py < y1;
+    }
+
     public static ObjectControl getSelectedObjectControl(Image scaledImage, DetectedObject object, Point point) {
         if (object == null) {
             return null;

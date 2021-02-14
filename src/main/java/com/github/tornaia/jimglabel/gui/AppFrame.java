@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -66,6 +67,7 @@ public class AppFrame {
     private int currentImageWidth;
     private int currentImageHeight;
     private List<DetectedObject> detectedObjects;
+    private List<AutoCompleteComboBox> autoCompleteComboBoxes;
     private DetectedObject selectedObject;
     private ObjectControl selectedObjectControl;
     private Point mousePressedPoint;
@@ -178,8 +180,9 @@ public class AppFrame {
     }
 
     private JPanel createDetailsPanel() {
-        // source, file
+        // source, target, file
         JPanel top = new JPanel(new GridBagLayout());
+        top.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         JLabel sourceLabel = new JLabel("Source");
         this.sourceValue = new JLabel();
         JLabel targetLabel = new JLabel("Target");
@@ -196,10 +199,8 @@ public class AppFrame {
         top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.validateDirectoryButton = new JButton("Validate");
-        validateDirectoryButton.setMnemonic('V');
-        validateDirectoryButton.setToolTipText("Validate images");
+        validateDirectoryButton.setToolTipText("Validate");
         validateDirectoryButton.addActionListener(e -> validateDirectory());
-        validateDirectoryButton.registerKeyboardAction(e -> validateDirectory(), KeyStroke.getKeyStroke(KeyEvent.VK_V, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         validateDirectoryButton.setEnabled(false);
         top.add(validateDirectoryButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
         top.add(new JSeparator(), new GridBagConstraints(0, 3, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
@@ -210,11 +211,11 @@ public class AppFrame {
         top.add(sizeLabel, new GridBagConstraints(0, 6, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(sizeValue, new GridBagConstraints(1, 6, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
-        this.deleteImageButton = new JButton("Delete");
-        deleteImageButton.setMnemonic('D');
+        this.deleteImageButton = new JButton("Delete image");
+        deleteImageButton.setMnemonic(KeyEvent.VK_DELETE);
         deleteImageButton.setToolTipText("Delete image");
         deleteImageButton.addActionListener(e -> deleteImage());
-        deleteImageButton.registerKeyboardAction(e -> deleteImage(), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        deleteImageButton.registerKeyboardAction(e -> deleteImage(), KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         deleteImageButton.setEnabled(false);
         top.add(deleteImageButton, new GridBagConstraints(0, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
         top.add(new JSeparator(), new GridBagConstraints(0, 8, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
@@ -224,10 +225,12 @@ public class AppFrame {
 
         // objects
         objectsScrollPanel = new JScrollPane(new JPanel());
-        objectsScrollPanel.setBorder(BorderFactory.createEmptyBorder());
+        objectsScrollPanel.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        objectsScrollPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
 
         // controls
         JPanel controlsPanel = new JPanel(new FlowLayout());
+        controlsPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         JButton prevButton = new JButton("\u003C Prev");
         prevButton.setMnemonic('\u003C');
         prevButton.setToolTipText("Previous image");
@@ -338,6 +341,7 @@ public class AppFrame {
         this.currentImageWidth = 0;
         this.currentImageHeight = 0;
         this.detectedObjects = null;
+        this.autoCompleteComboBoxes = null;
 
         String targetDirectory = userSettingsProvider.read().getTargetDirectory();
         if (targetDirectory == null) {
@@ -582,7 +586,12 @@ public class AppFrame {
                                 enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
                             }
                         } else {
-                            enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+                            Optional<DetectedObject> optionalDetectedObject = getObject(scaledImage, point);
+                            if (optionalDetectedObject.isPresent()) {
+                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                            } else {
+                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+                            }
                         }
 
                         // x-y-cross
@@ -591,6 +600,22 @@ public class AppFrame {
                     }
                 });
                 this.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        Point point = e.getPoint();
+                        Optional<DetectedObject> optionalDetectedObject = getObject(scaledImage, point);
+                        if (optionalDetectedObject.isPresent()) {
+                            List<DetectedObject> detectedObjects = AppFrame.this.detectedObjects;
+                            DetectedObject selectedObject = optionalDetectedObject.get();
+                            int itemIndex = detectedObjects.indexOf(selectedObject);
+                            if (itemIndex == -1) {
+                                throw new IllegalStateException("Must not happen");
+                            }
+                            AutoCompleteComboBox autoCompleteComboBox = AppFrame.this.autoCompleteComboBoxes.get(itemIndex);
+                            autoCompleteComboBox.requestFocus();
+                        }
+                    }
+
                     @Override
                     public void mousePressed(MouseEvent e) {
                         Point point = e.getPoint();
@@ -609,12 +634,17 @@ public class AppFrame {
 
                     @Override
                     public void mouseReleased(MouseEvent e) {
+                        Point from = drawFrom.get();
+                        Point to = drawTo.get();
+                        boolean clickedAndNotDragged = from != null && to == null;
+                        if (clickedAndNotDragged) {
+                            drawFrom.set(null);
+                            return;
+                        }
+
                         int scaledImageWidth = scaledImage.getWidth(null);
                         int scaledImageHeight = scaledImage.getHeight(null);
                         Point c = new Point(Math.min(scaledImageWidth, Math.max(0, e.getX())), Math.min(scaledImageHeight, Math.max(0, e.getY())));
-
-                        Point from = drawFrom.get();
-                        Point to = drawTo.get();
                         String name = selectedObject != null ? selectedObject.getName() : null;
 
                         if (selectedObjectControl == null ||
@@ -736,7 +766,7 @@ public class AppFrame {
                 Graphics2D g2 = (Graphics2D) g;
                 g2.setStroke(new BasicStroke(2));
 
-                // rectangles
+                // object rectangles
                 AppFrame.this.detectedObjects.forEach(e -> {
                     float top = e.getTop();
                     float right = e.getRight();
@@ -825,10 +855,11 @@ public class AppFrame {
                     }
                 });
 
-                // new rectangle
                 Point from = drawFrom.get();
                 Point to = drawTo.get();
+                Point cp = currentPoint.get();
                 if (from != null && to != null) {
+                    // new rectangle
                     int fromX = from.x;
                     int fromY = from.y;
                     int toX = to.x;
@@ -839,16 +870,13 @@ public class AppFrame {
                     int height = Math.abs(toY - fromY);
                     g.setColor(new Color(0, 72, 186));
                     g.drawRect(x, y, width, height);
-                }
-
-                // x-y-cross
-                Point cp = currentPoint.get();
-                boolean drawCurrentPoint = cp != null;
-                if (drawCurrentPoint) {
+                } else if (cp != null) {
+                    // x-y-cross
                     g.setColor(Color.RED);
                     g.drawLine(0, (int) cp.getY(), this.scaledImage.getWidth(null), (int) cp.getY());
                     g.drawLine((int) cp.getX(), 0, (int) cp.getX(), this.scaledImage.getHeight(null));
                 }
+
             }
         };
         imagePanel.add(image);
@@ -865,9 +893,11 @@ public class AppFrame {
     private void updateObjectsPanel() {
         List<String> classList = ClassUtil.getClasses();
 
+        this.autoCompleteComboBoxes = new ArrayList<>();
+
         JPanel nestedObjectsPanel = new JPanel();
         nestedObjectsPanel.setLayout(new BoxLayout(nestedObjectsPanel, BoxLayout.Y_AXIS));
-        JComboBox<String> objectClassComboBox = null;
+        AutoCompleteComboBox objectClassComboBox = null;
         for (int i = 0; i < detectedObjects.size(); i++) {
             DetectedObject detectedObject = detectedObjects.get(i);
 
@@ -878,6 +908,7 @@ public class AppFrame {
             objectPanel.add(indexLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
             objectClassComboBox = new AutoCompleteComboBox(classList.toArray(new String[0]));
+            this.autoCompleteComboBoxes.add(objectClassComboBox);
             objectClassComboBox.addActionListener(e -> {
                 JComboBox<?> source = (JComboBox<?>) e.getSource();
                 String selectedItem = (String) source.getSelectedItem();
@@ -909,6 +940,13 @@ public class AppFrame {
             objectPanel.add(new JLabel("left"), new GridBagConstraints(0, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
             objectPanel.add(new JLabel(String.format("%.2f%%", detectedObject.getLeft() * 100)), new GridBagConstraints(1, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
 
+            JButton deleteObjectButton = new JButton("Delete object");
+            deleteObjectButton.setMnemonic(KeyEvent.VK_D);
+            deleteObjectButton.setToolTipText("Delete object");
+            deleteObjectButton.addActionListener(e -> deleteObject(detectedObject));
+            deleteObjectButton.registerKeyboardAction(e -> deleteObject(detectedObject), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+            objectPanel.add(deleteObjectButton, new GridBagConstraints(0, 8, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
+
             nestedObjectsPanel.add(objectPanel);
         }
 
@@ -920,6 +958,14 @@ public class AppFrame {
         if (objectClassComboBox != null) {
             objectClassComboBox.requestFocusInWindow();
         }
+    }
+
+    private void deleteObject(DetectedObject detectedObject) {
+        AppFrame.this.selectedObject = null;
+        AppFrame.this.detectedObjects.remove(detectedObject);
+        updateAnnotationFile();
+        updateObjectsPanel();
+        imagePanel.repaint();
     }
 
     private void updateAnnotationFile() {
@@ -948,6 +994,13 @@ public class AppFrame {
         String directory = userSettingsProvider.read().getSourceDirectory();
         String annotationFileName = this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json";
         return Path.of(directory).resolve(annotationFileName);
+    }
+
+    private Optional<DetectedObject> getObject(Image scaledImage, Point point) {
+        return detectedObjects
+                .stream()
+                .filter(object -> DetectedObjectUtil.isObjectArea(scaledImage, object, point))
+                .findFirst();
     }
 
     private DetectedObject getSelectedObject(Image scaledImage, Point point) {
