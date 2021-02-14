@@ -232,33 +232,39 @@ public class AppFrame {
 
         // controls
         JPanel controlsPanel = new JPanel(new FlowLayout());
-        controlsPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
-        JButton prevButton = new JButton("\u003C Prev");
-        prevButton.setMnemonic('\u003C');
+        JButton prevButton = new JButton("\u003C");
+        prevButton.setMnemonic(KeyEvent.VK_LEFT);
         prevButton.setToolTipText("Previous image");
         prevButton.addActionListener(e -> loadPreviousImage());
         prevButton.registerKeyboardAction(e -> loadPreviousImage(), KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         JButton addButton = new JButton("Add");
-        addButton.setMnemonic('A');
+        addButton.setMnemonic(KeyEvent.VK_A);
         addButton.setToolTipText("Add object");
         addButton.addActionListener(e -> addNewObject());
         addButton.registerKeyboardAction(e -> addNewObject(), KeyStroke.getKeyStroke(KeyEvent.VK_A, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
+        JButton deleteObjectButton = new JButton("Delete");
+        deleteObjectButton.setMnemonic(KeyEvent.VK_D);
+        deleteObjectButton.setToolTipText("Delete object");
+        deleteObjectButton.addActionListener(e -> deleteObject());
+        deleteObjectButton.registerKeyboardAction(e -> deleteObject(), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
+
         JButton resetButton = new JButton("Reset");
-        resetButton.setMnemonic('R');
+        resetButton.setMnemonic(KeyEvent.VK_R);
         resetButton.setToolTipText("Reset objects");
         resetButton.addActionListener(e -> resetImage());
         resetButton.registerKeyboardAction(e -> resetImage(), KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        JButton nextButton = new JButton("Next \u003E");
-        nextButton.setMnemonic('\u003E');
+        JButton nextButton = new JButton("\u003E");
+        nextButton.setMnemonic(KeyEvent.VK_RIGHT);
         nextButton.setToolTipText("Next image");
         nextButton.addActionListener(e -> loadNextImage());
         nextButton.registerKeyboardAction(e -> loadNextImage(), KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         controlsPanel.add(prevButton);
         controlsPanel.add(addButton);
+        controlsPanel.add(deleteObjectButton);
         controlsPanel.add(resetButton);
         controlsPanel.add(nextButton);
 
@@ -322,6 +328,15 @@ public class AppFrame {
 
     private void addNewObject() {
 
+    }
+
+    private void deleteObject() {
+        if (selectedObject != null) {
+            AppFrame.this.detectedObjects.remove(selectedObject);
+            updateAnnotationFile();
+            updateObjectsPanel();
+            imagePanel.repaint();
+        }
     }
 
     private void resetImage() {
@@ -975,13 +990,6 @@ public class AppFrame {
             objectPanel.add(new JLabel("left"), new GridBagConstraints(0, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
             objectPanel.add(new JLabel(String.format("%.2f%%", detectedObject.getLeft() * 100)), new GridBagConstraints(1, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
 
-            JButton deleteObjectButton = new JButton("Delete object");
-            deleteObjectButton.setMnemonic(KeyEvent.VK_D);
-            deleteObjectButton.setToolTipText("Delete object");
-            deleteObjectButton.addActionListener(e -> deleteObject(detectedObject));
-            deleteObjectButton.registerKeyboardAction(e -> deleteObject(detectedObject), KeyStroke.getKeyStroke(KeyEvent.VK_D, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
-            objectPanel.add(deleteObjectButton, new GridBagConstraints(0, 8, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 24, 0, 0), 0, 0));
-
             nestedObjectsPanel.add(objectPanel);
         }
 
@@ -993,14 +1001,6 @@ public class AppFrame {
         if (objectClassComboBox != null) {
             objectClassComboBox.requestFocusInWindow();
         }
-    }
-
-    private void deleteObject(DetectedObject detectedObject) {
-        AppFrame.this.selectedObject = null;
-        AppFrame.this.detectedObjects.remove(detectedObject);
-        updateAnnotationFile();
-        updateObjectsPanel();
-        imagePanel.repaint();
     }
 
     private void updateAnnotationFile() {
