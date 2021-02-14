@@ -11,7 +11,9 @@ import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.util.ClassUtil;
 import com.github.tornaia.jimglabel.gui.util.DetectedObjectUtil;
 import com.github.tornaia.jimglabel.gui.util.FileUtil;
+import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
 import com.github.tornaia.jimglabel.gui.util.ObjectControl;
+import com.github.tornaia.jimglabel.gui.util.OptimizeImageUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +60,7 @@ public class AppFrame {
     private JLabel sourceValue;
     private JLabel targetValue;
     private JButton validateDirectoryButton;
+    private JButton generateImagesButton;
     private JLabel fileValue;
     private JLabel resolutionValue;
     private JLabel sizeValue;
@@ -66,6 +69,7 @@ public class AppFrame {
 
     private int currentImageIndex;
     private String currentImageFileName;
+    private BufferedImage bufferedImage;
     private int currentImageWidth;
     private int currentImageHeight;
     private List<DetectedObject> detectedObjects;
@@ -201,10 +205,16 @@ public class AppFrame {
         top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         this.validateDirectoryButton = new JButton("Validate");
-        validateDirectoryButton.setToolTipText("Validate");
+        validateDirectoryButton.setToolTipText("Validate source images");
         validateDirectoryButton.addActionListener(e -> validateDirectory());
         validateDirectoryButton.setEnabled(false);
         top.add(validateDirectoryButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        this.generateImagesButton = new JButton("Generate");
+        generateImagesButton.setToolTipText("Generates optimized images");
+        generateImagesButton.addActionListener(e -> generateImages());
+        generateImagesButton.setEnabled(false);
+        top.add(generateImagesButton, new GridBagConstraints(1, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
+
         top.add(new JSeparator(), new GridBagConstraints(0, 3, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
         top.add(fileLabel, new GridBagConstraints(0, 4, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
         top.add(fileValue, new GridBagConstraints(1, 4, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
@@ -311,6 +321,59 @@ public class AppFrame {
         }
     }
 
+    private void generateImages() {
+        if (currentImageIndex == -1) {
+            loadNextImage();
+        }
+
+        if (currentImageIndex == -1) {
+            return;
+        }
+
+        String targetDirectory = userSettingsProvider.read().getTargetDirectory();
+        if (targetDirectory == null) {
+            JOptionPane.showMessageDialog(jFrame, "Configure target directory");
+            return;
+        }
+
+        Path targetDirectoryFile = Path.of(targetDirectory);
+        boolean targetDirectoryExist = Files.isDirectory(targetDirectoryFile);
+        String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
+        if (!targetDirectoryExist) {
+            JOptionPane.showMessageDialog(jFrame, targetDirectoryAbsolutePath + " not found");
+        }
+
+        loadImage();
+
+        int startedAt = currentImageIndex;
+        while (true) {
+            if (detectedObjects.size() != 1) {
+                throw new IllegalStateException("Must not happen");
+            }
+
+            LOG.info("Generating optimized image of: {}", currentImageFileName);
+            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(this.bufferedImage, detectedObjects));
+
+            try {
+                Path optimizedImagePath = targetDirectoryFile.resolve(currentImageFileName);
+                ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
+                long size = Files.size(optimizedImagePath);
+                Path optimizedAnnotationPath = targetDirectoryFile.resolve(this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json");
+                Annotation annotation = new Annotation(currentImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
+                String annotationContent = serializerUtils.toJSON(annotation);
+                Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
+            }
+
+            loadNextImage();
+
+            if (startedAt == currentImageIndex) {
+                return;
+            }
+        }
+    }
+
     private void deleteImage() {
         String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
         try {
@@ -353,8 +416,10 @@ public class AppFrame {
 
     private void loadImage() {
         validateDirectoryButton.setEnabled(false);
+        generateImagesButton.setEnabled(false);
         deleteImageButton.setEnabled(false);
 
+        this.bufferedImage = null;
         this.currentImageWidth = 0;
         this.currentImageHeight = 0;
         this.detectedObjects = null;
@@ -427,9 +492,8 @@ public class AppFrame {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        BufferedImage bufferedImage;
         try {
-            bufferedImage = ImageIO.read(new ByteArrayInputStream(currentImageBytes));
+            this.bufferedImage = ImageIO.read(new ByteArrayInputStream(currentImageBytes));
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
@@ -809,7 +873,7 @@ public class AppFrame {
                     int height = (int) (this.targetHeight * (bottom - top));
                     boolean currentObjectIsSelected = e == AppFrame.this.selectedObject;
                     boolean currentObjectIsUnderMouse = cp != null && e.equals(getObject(scaledImage, cp).orElse(null));
-                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(255,64,56) : new Color(205, 92, 92);
+                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(255, 64, 56) : new Color(205, 92, 92);
                     g.setColor(color);
                     g.drawRect(x, y, width, height);
 
@@ -922,6 +986,7 @@ public class AppFrame {
         sizeValue.setText(FileUtil.readableFileSize(currentImageBytes.length));
         deleteImageButton.setEnabled(true);
         validateDirectoryButton.setEnabled(true);
+        generateImagesButton.setEnabled(true);
 
         updateObjectsPanel();
     }

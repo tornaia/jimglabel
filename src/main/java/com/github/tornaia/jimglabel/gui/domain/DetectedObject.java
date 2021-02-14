@@ -12,6 +12,9 @@ public class DetectedObject {
     }
 
     public DetectedObject(String name, float top, float right, float bottom, float left) {
+        if (top < 0 || right < 0 || bottom < 0 || left < 0 || top > 1 || right > 1 || bottom > 1 || left > 1) {
+            throw new IllegalStateException("Must not happen");
+        }
         this.name = name;
         this.top = top;
         this.right = right;
