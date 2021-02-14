@@ -982,6 +982,7 @@ public class AppFrame {
             }
         };
         imagePanel.add(image);
+        image.revalidate();
 
         fileValue.setText(currentImageFileName);
         resolutionValue.setText(String.format("%s x %s", currentImageWidth, currentImageHeight));
