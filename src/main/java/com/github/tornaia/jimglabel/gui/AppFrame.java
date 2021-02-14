@@ -904,7 +904,7 @@ public class AppFrame {
                     int y = Math.min(fromY, toY);
                     int width = Math.abs(toX - fromX);
                     int height = Math.abs(toY - fromY);
-                    g.setColor(new Color(0, 72, 186));
+                    g.setColor(new Color(0, 8, 255));
                     g.drawRect(x, y, width, height);
                 } else if (cp != null) {
                     // x-y-cross
