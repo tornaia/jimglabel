@@ -53,6 +53,7 @@ public class AppFrame {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserSettingsProvider userSettingsProvider;
     private final ApplicationSettings applicationSettings;
+    private final ClassUtil classUtil;
     private final SerializerUtils serializerUtils;
 
     private final JFrame jFrame;
@@ -79,10 +80,11 @@ public class AppFrame {
     private Point mousePressedPoint;
 
     @Autowired
-    public AppFrame(ApplicationEventPublisher applicationEventPublisher, UserSettingsProvider userSettingsProvider, ApplicationSettings applicationSettings, SerializerUtils serializerUtils, UIUtils uiUtils) {
+    public AppFrame(ApplicationEventPublisher applicationEventPublisher, UserSettingsProvider userSettingsProvider, ApplicationSettings applicationSettings, ClassUtil classUtil, SerializerUtils serializerUtils, UIUtils uiUtils) {
         this.applicationEventPublisher = applicationEventPublisher;
         this.userSettingsProvider = userSettingsProvider;
         this.applicationSettings = applicationSettings;
+        this.classUtil = classUtil;
         this.serializerUtils = serializerUtils;
         this.jFrame = new JFrame(String.format("%s (%s)", applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
@@ -992,7 +994,7 @@ public class AppFrame {
     }
 
     private void updateObjectsPanel() {
-        List<String> classList = ClassUtil.getClasses();
+        List<String> classList = classUtil.getClasses();
 
         this.autoCompleteComboBoxes = new ArrayList<>();
 
