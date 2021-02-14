@@ -809,7 +809,7 @@ public class AppFrame {
                     int height = (int) (this.targetHeight * (bottom - top));
                     boolean currentObjectIsSelected = e == AppFrame.this.selectedObject;
                     boolean currentObjectIsUnderMouse = cp != null && e.equals(getObject(scaledImage, cp).orElse(null));
-                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(205, 92, 92) : Color.LIGHT_GRAY;
+                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(255,64,56) : new Color(205, 92, 92);
                     g.setColor(color);
                     g.drawRect(x, y, width, height);
 
