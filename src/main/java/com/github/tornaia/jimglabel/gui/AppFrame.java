@@ -354,14 +354,15 @@ public class AppFrame {
             }
 
             LOG.info("Generating optimized image of: {}", currentImageFileName);
-            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(this.bufferedImage, detectedObjects));
+            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
 
             try {
-                Path optimizedImagePath = targetDirectoryFile.resolve(currentImageFileName);
+                String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
+                Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
                 ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
                 long size = Files.size(optimizedImagePath);
-                Path optimizedAnnotationPath = targetDirectoryFile.resolve(this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json");
-                Annotation annotation = new Annotation(currentImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
+                Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
+                Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
                 String annotationContent = serializerUtils.toJSON(annotation);
                 Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
             } catch (IOException e) {
