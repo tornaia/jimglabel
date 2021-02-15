@@ -36,6 +36,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,8 @@ import java.util.stream.Collectors;
 public class AppFrame {
 
     private static final Logger LOG = LoggerFactory.getLogger(AppFrame.class);
+
+    private static final String CLASSES_FILENAME = "!classes.json";
 
     private final ApplicationEventPublisher applicationEventPublisher;
     private final UserSettingsProvider userSettingsProvider;
@@ -343,7 +346,19 @@ public class AppFrame {
         String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
         if (!targetDirectoryExist) {
             JOptionPane.showMessageDialog(jFrame, targetDirectoryAbsolutePath + " not found");
+            return;
         }
+
+        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
+
+        Path sourceClassesFile = Path.of(sourceDirectory).resolve(CLASSES_FILENAME);
+        Path targetClassesFile = Path.of(targetDirectory).resolve(CLASSES_FILENAME);
+        try {
+            Files.copy(sourceClassesFile, targetClassesFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+        } catch (IOException e) {
+            throw new IllegalStateException("Must not happen", e);
+        }
+        LOG.info("Classes file under target directory is updated: {}", targetClassesFile);
 
         loadImage();
 
@@ -354,19 +369,21 @@ public class AppFrame {
             }
 
             LOG.info("Generating optimized image of: {}", currentImageFileName);
-            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
 
-            try {
-                String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
-                Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
-                ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
-                long size = Files.size(optimizedImagePath);
-                Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
-                Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
-                String annotationContent = serializerUtils.toJSON(annotation);
-                Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
-            } catch (IOException e) {
-                throw new IllegalStateException("Must not happen", e);
+            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
+            if (optimizedImage != null) {
+                try {
+                    String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
+                    Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
+                    ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
+                    long size = Files.size(optimizedImagePath);
+                    Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
+                    Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
+                    String annotationContent = serializerUtils.toJSON(annotation);
+                    Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Must not happen", e);
+                }
             }
 
             loadNextImage();

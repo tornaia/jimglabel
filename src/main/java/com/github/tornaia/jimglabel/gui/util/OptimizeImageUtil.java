@@ -1,6 +1,8 @@
 package com.github.tornaia.jimglabel.gui.util;
 
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -8,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class OptimizeImageUtil {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OptimizeImageUtil.class);
 
     private static final int TARGET_WIDTH = 600;
     private static final int TARGET_HEIGHT = 600;
@@ -23,9 +27,7 @@ public final class OptimizeImageUtil {
 
         ImageWithMeta preCropped = cropToAlignWithTargetAspectRatio(input);
         ImageWithMeta cropped = cropToAlignWithExpectedObjectToImageRatio(preCropped);
-        ImageWithMeta resized = resizeToAlignWithExpectedTarget(cropped);
-
-        return resized;
+        return resizeToAlignWithExpectedTarget(cropped);
     }
 
     // crop image: image has the target aspect ratio
@@ -99,15 +101,17 @@ public final class OptimizeImageUtil {
         int cropY0;
         int cropHeight;
         if (cropRequired) {
-            double cutEdge = Math.sqrt(objectToImageAreaRatio / TARGET_OBJECT_TO_IMAGE_AREA_RATIO);
+            double cutEdge = 1 - Math.sqrt(objectToImageAreaRatio / TARGET_OBJECT_TO_IMAGE_AREA_RATIO);
             double objectCenterX = (imageWidth * (detectedObject.getLeft() + detectedObject.getRight()) / 2);
             double objectCenterY = (imageHeight * (detectedObject.getTop() + detectedObject.getBottom()) / 2);
-            double cutLeft = (1 - cutEdge) * objectCenterX / imageWidth;
-            double cutTop = (1 - cutEdge) * objectCenterY / imageHeight;
-            cropX0 = (int) (imageWidth * cutLeft);
-            cropWidth = (int) (imageWidth * (1 - cutLeft));
-            cropY0 = (int) (imageHeight * cutTop);
-            cropHeight = (int) (imageHeight * (1 - cutTop));
+            double cutLeft = cutEdge * objectCenterX / imageWidth;
+            double cutRight = 1 - (cutEdge - cutLeft);
+            double cutTop = cutEdge * objectCenterY / imageHeight;
+            double cutBottom = 1 - (cutEdge - cutTop);
+            cropX0 = (int) (cutLeft * imageWidth);
+            cropWidth = (int) ((cutRight - cutLeft) * imageWidth);
+            cropY0 = (int) (cutTop * imageHeight);
+            cropHeight = (int) ((cutBottom - cutTop) * imageHeight);
         } else {
             cropX0 = 0;
             cropWidth = imageWidth;
@@ -140,12 +144,21 @@ public final class OptimizeImageUtil {
 
     // resize image: image has the target width and height
     private static ImageWithMeta resizeToAlignWithExpectedTarget(ImageWithMeta input) {
-        Image image = input.getImage().getScaledInstance(TARGET_WIDTH, TARGET_HEIGHT, Image.SCALE_SMOOTH);
+        BufferedImage inputBufferedImage = input.getImage();
+        int inputWidth = inputBufferedImage.getWidth();
+        int inputHeight = inputBufferedImage.getHeight();
+
+        if (TARGET_WIDTH > inputWidth || TARGET_HEIGHT > inputHeight) {
+            LOG.warn("Failed to generate optimized image, image or object area is too small, image: {}x{}, target: {}x{}", inputWidth, inputHeight, TARGET_WIDTH, TARGET_HEIGHT);
+            return null;
+        }
+
+        Image scaledImage = inputBufferedImage.getScaledInstance(TARGET_WIDTH, TARGET_HEIGHT, Image.SCALE_SMOOTH);
 
         BufferedImage resultImage = new BufferedImage(TARGET_WIDTH, TARGET_HEIGHT, input.getImage().getType());
 
         Graphics2D g2d = resultImage.createGraphics();
-        g2d.drawImage(image, 0, 0, null);
+        g2d.drawImage(scaledImage, 0, 0, null);
         g2d.dispose();
 
         return new ImageWithMeta(resultImage, input.getObjects());
