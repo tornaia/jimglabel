@@ -216,7 +216,7 @@ public class AppFrame {
         top.add(validateDirectoryButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
         this.generateImagesButton = new JButton("Generate");
         generateImagesButton.setToolTipText("Generates optimized images");
-        generateImagesButton.addActionListener(e -> generateImages());
+        generateImagesButton.addActionListener(e -> generateImages(true));
         generateImagesButton.setEnabled(false);
         top.add(generateImagesButton, new GridBagConstraints(1, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
 
@@ -294,39 +294,10 @@ public class AppFrame {
     }
 
     private void validateDirectory() {
-        if (currentImageIndex == -1) {
-            loadNextImage();
-        }
-
-        if (currentImageIndex == -1) {
-            return;
-        }
-
-        int startedAt = currentImageIndex;
-        while (true) {
-            boolean noObject = detectedObjects.isEmpty();
-            if (noObject) {
-                JOptionPane.showMessageDialog(jFrame, "No object found on this image");
-                return;
-            }
-
-            boolean missingName = detectedObjects
-                    .stream()
-                    .anyMatch(e -> Objects.isNull(e.getName()));
-            if (missingName) {
-                JOptionPane.showMessageDialog(jFrame, "Missing name for object");
-                return;
-            }
-
-            loadNextImage();
-
-            if (startedAt == currentImageIndex) {
-                return;
-            }
-        }
+        generateImages(false);
     }
 
-    private void generateImages() {
+    private void generateImages(boolean writeToDisk) {
         if (currentImageIndex == -1) {
             loadNextImage();
         }
@@ -364,14 +335,36 @@ public class AppFrame {
 
         int startedAt = currentImageIndex;
         while (true) {
-            if (detectedObjects.size() != 1) {
-                throw new IllegalStateException("Must not happen");
+            boolean noObject = detectedObjects.isEmpty();
+            if (noObject) {
+                JOptionPane.showMessageDialog(jFrame, "No object found on this image");
+                return;
+            }
+
+            boolean multipleObjects = detectedObjects.size() > 1;
+            if (multipleObjects) {
+                JOptionPane.showMessageDialog(jFrame, "Multiple objects found on this image");
+                return;
+            }
+
+            boolean missingName = detectedObjects
+                    .stream()
+                    .anyMatch(e -> Objects.isNull(e.getName()));
+            if (missingName) {
+                JOptionPane.showMessageDialog(jFrame, "Missing name for object");
+                return;
             }
 
             LOG.info("Generating optimized image of: {}", currentImageFileName);
 
             ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
-            if (optimizedImage != null) {
+            if (optimizedImage == null) {
+                // get a message from optimize, whats the problem
+                JOptionPane.showMessageDialog(jFrame, "Problematic image");
+                return;
+            }
+
+            if (writeToDisk) {
                 try {
                     String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
                     Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
