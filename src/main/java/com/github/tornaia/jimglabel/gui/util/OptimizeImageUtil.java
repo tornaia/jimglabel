@@ -27,6 +27,10 @@ public final class OptimizeImageUtil {
 
         ImageWithMeta preCropped = cropToAlignWithTargetAspectRatio(input);
         ImageWithMeta cropped = cropToAlignWithExpectedObjectToImageRatio(preCropped);
+        if (cropped == null) {
+            return null;
+        }
+
         return resizeToAlignWithExpectedTarget(cropped);
     }
 
@@ -119,6 +123,11 @@ public final class OptimizeImageUtil {
             cropHeight = imageHeight;
         }
 
+        if (cropWidth < TARGET_WIDTH || cropHeight < TARGET_HEIGHT) {
+            LOG.warn("Failed to generate optimized image, image or object area is too small, cropped image: {}x{}, target: {}x{}", cropWidth, cropHeight, TARGET_WIDTH, TARGET_HEIGHT);
+            return null;
+        }
+
         BufferedImage resultImage = bufferedImage.getSubimage(cropX0, cropY0, cropWidth, cropHeight);
 
         List<DetectedObject> resultObjects = new ArrayList<>();
@@ -149,7 +158,7 @@ public final class OptimizeImageUtil {
         int inputHeight = inputBufferedImage.getHeight();
 
         if (TARGET_WIDTH > inputWidth || TARGET_HEIGHT > inputHeight) {
-            LOG.warn("Failed to generate optimized image, image or object area is too small, image: {}x{}, target: {}x{}", inputWidth, inputHeight, TARGET_WIDTH, TARGET_HEIGHT);
+            LOG.warn("Failed to generate optimized image, image or object area is too small, resized image: {}x{}, target: {}x{}", inputWidth, inputHeight, TARGET_WIDTH, TARGET_HEIGHT);
             return null;
         }
 
