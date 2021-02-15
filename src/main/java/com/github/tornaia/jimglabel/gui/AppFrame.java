@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -58,12 +59,13 @@ public class AppFrame {
     private final ApplicationSettings applicationSettings;
     private final ClassUtil classUtil;
     private final SerializerUtils serializerUtils;
+    private final UIUtils uiUtils;
 
     private final JFrame jFrame;
     private JPanel imagePanel;
     private JLabel sourceValue;
     private JLabel targetValue;
-    private JButton validateDirectoryButton;
+    private JButton validateSourceButton;
     private JButton generateImagesButton;
     private JLabel fileValue;
     private JLabel resolutionValue;
@@ -89,6 +91,7 @@ public class AppFrame {
         this.applicationSettings = applicationSettings;
         this.classUtil = classUtil;
         this.serializerUtils = serializerUtils;
+        this.uiUtils = uiUtils;
         this.jFrame = new JFrame(String.format("%s (%s)", applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
         initComponents();
@@ -209,11 +212,11 @@ public class AppFrame {
         top.add(targetLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
-        this.validateDirectoryButton = new JButton("Validate");
-        validateDirectoryButton.setToolTipText("Validate source images");
-        validateDirectoryButton.addActionListener(e -> validateDirectory());
-        validateDirectoryButton.setEnabled(false);
-        top.add(validateDirectoryButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+        this.validateSourceButton = new JButton("Validate");
+        validateSourceButton.setToolTipText("Validate source images");
+        validateSourceButton.addActionListener(e -> validateSource());
+        validateSourceButton.setEnabled(false);
+        top.add(validateSourceButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
         this.generateImagesButton = new JButton("Generate");
         generateImagesButton.setToolTipText("Generates optimized images");
         generateImagesButton.addActionListener(e -> generateImages(true));
@@ -293,7 +296,7 @@ public class AppFrame {
         return detailsPanel;
     }
 
-    private void validateDirectory() {
+    private void validateSource() {
         generateImages(false);
     }
 
@@ -332,59 +335,97 @@ public class AppFrame {
         LOG.info("Classes file under target directory is updated: {}", targetClassesFile);
 
         loadImage();
-
         int startedAt = currentImageIndex;
-        while (true) {
-            boolean noObject = detectedObjects.isEmpty();
-            if (noObject) {
-                JOptionPane.showMessageDialog(jFrame, "No object found on this image");
-                return;
-            }
+        new Thread(() -> {
 
-            boolean multipleObjects = detectedObjects.size() > 1;
-            if (multipleObjects) {
-                JOptionPane.showMessageDialog(jFrame, "Multiple objects found on this image");
-                return;
-            }
+            while (true) {
+                boolean success = generateNextInternal(writeToDisk, startedAt, targetDirectoryFile);
+                if (!success) {
+                    return;
+                }
 
-            boolean missingName = detectedObjects
-                    .stream()
-                    .anyMatch(e -> Objects.isNull(e.getName()));
-            if (missingName) {
-                JOptionPane.showMessageDialog(jFrame, "Missing name for object");
-                return;
-            }
+                AtomicBoolean loading = new AtomicBoolean();
 
-            LOG.info("Generating optimized image of: {}", currentImageFileName);
+                loading.set(true);
+                uiUtils.invokeLater("x", () -> {
+                    loadNextImage();
+                    loading.set(false);
+                });
 
-            ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
-            if (optimizedImage == null) {
-                // get a message from optimize, whats the problem
-                JOptionPane.showMessageDialog(jFrame, "Problematic image");
-                return;
-            }
+                AtomicBoolean interrupted = new AtomicBoolean();
+                while (loading.get()) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        LOG.error("Unexpected termination", e);
+                        interrupted.set(true);
+                        return;
+                    }
+                }
 
-            if (writeToDisk) {
-                try {
-                    String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
-                    Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
-                    ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
-                    long size = Files.size(optimizedImagePath);
-                    Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
-                    Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
-                    String annotationContent = serializerUtils.toJSON(annotation);
-                    Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
-                } catch (IOException e) {
-                    throw new IllegalStateException("Must not happen", e);
+                if (interrupted.get()) {
+                    return;
+                }
+
+                boolean done = startedAt == currentImageIndex;
+                if (done) {
+                    return;
                 }
             }
 
-            loadNextImage();
+        }).start();
+    }
 
-            if (startedAt == currentImageIndex) {
-                return;
+    private boolean generateNextInternal(boolean writeToDisk, int startedAt, Path targetDirectoryFile) {
+        boolean noObject = detectedObjects.isEmpty();
+        if (noObject) {
+            JOptionPane.showMessageDialog(jFrame, "No object found on this image");
+            return false;
+        }
+
+        boolean multipleObjects = detectedObjects.size() > 1;
+        if (multipleObjects) {
+            JOptionPane.showMessageDialog(jFrame, "Multiple objects found on this image");
+            return false;
+        }
+
+        boolean missingName = detectedObjects
+                .stream()
+                .anyMatch(e -> Objects.isNull(e.getName()));
+        if (missingName) {
+            JOptionPane.showMessageDialog(jFrame, "Missing name for object");
+            return false;
+        }
+
+        if (writeToDisk) {
+            LOG.info("Generate optimized image of: {}", currentImageFileName);
+        } else {
+            LOG.info("Validate image: {}", currentImageFileName);
+        }
+
+        ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
+        if (optimizedImage == null) {
+            // get a message from optimize, whats the problem
+            JOptionPane.showMessageDialog(jFrame, "Problematic image");
+            return false;
+        }
+
+        if (writeToDisk) {
+            try {
+                String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
+                Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
+                ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
+                long size = Files.size(optimizedImagePath);
+                Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
+                Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
+                String annotationContent = serializerUtils.toJSON(annotation);
+                Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
             }
         }
+
+        return true;
     }
 
     private void deleteImage() {
@@ -428,7 +469,7 @@ public class AppFrame {
     }
 
     private void loadImage() {
-        validateDirectoryButton.setEnabled(false);
+        validateSourceButton.setEnabled(false);
         generateImagesButton.setEnabled(false);
         deleteImageButton.setEnabled(false);
 
@@ -999,7 +1040,7 @@ public class AppFrame {
         resolutionValue.setText(String.format("%s x %s", currentImageWidth, currentImageHeight));
         sizeValue.setText(FileUtil.readableFileSize(currentImageBytes.length));
         deleteImageButton.setEnabled(true);
-        validateDirectoryButton.setEnabled(true);
+        validateSourceButton.setEnabled(true);
         generateImagesButton.setEnabled(true);
 
         updateObjectsPanel();
