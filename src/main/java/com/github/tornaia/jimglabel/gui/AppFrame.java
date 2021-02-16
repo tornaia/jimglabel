@@ -335,11 +335,11 @@ public class AppFrame {
         LOG.info("Classes file under target directory is updated: {}", targetClassesFile);
 
         loadImage();
-        int startedAt = currentImageIndex;
         new Thread(() -> {
 
+            int startedAt = currentImageIndex;
             while (true) {
-                boolean success = generateNextInternal(writeToDisk, startedAt, targetDirectoryFile);
+                boolean success = generateNextInternal(writeToDisk, targetDirectoryFile);
                 if (!success) {
                     return;
                 }
@@ -376,7 +376,7 @@ public class AppFrame {
         }).start();
     }
 
-    private boolean generateNextInternal(boolean writeToDisk, int startedAt, Path targetDirectoryFile) {
+    private boolean generateNextInternal(boolean writeToDisk, Path targetDirectoryFile) {
         boolean noObject = detectedObjects.isEmpty();
         if (noObject) {
             JOptionPane.showMessageDialog(jFrame, "No object found on this image");
@@ -444,7 +444,6 @@ public class AppFrame {
     }
 
     private void addNewObject() {
-
     }
 
     private void deleteObject() {
