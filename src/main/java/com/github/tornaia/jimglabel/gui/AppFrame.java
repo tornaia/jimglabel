@@ -347,7 +347,7 @@ public class AppFrame {
                 AtomicBoolean loading = new AtomicBoolean();
 
                 loading.set(true);
-                uiUtils.invokeLater("x", () -> {
+                uiUtils.invokeLater("LoadNext", () -> {
                     loadNextImage();
                     loading.set(false);
                 });
