@@ -1,25 +1,23 @@
 package com.github.tornaia.jimglabel.gui;
 
 import com.github.tornaia.jimglabel.common.event.ApplicationEventPublisher;
-import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.common.setting.ApplicationSettings;
-import com.github.tornaia.jimglabel.common.setting.UserSettingsProvider;
 import com.github.tornaia.jimglabel.common.util.UIUtils;
 import com.github.tornaia.jimglabel.gui.component.AutoCompleteComboBox;
-import com.github.tornaia.jimglabel.gui.domain.Annotation;
+import com.github.tornaia.jimglabel.gui.component.EditableImagePanel;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
-import com.github.tornaia.jimglabel.gui.util.ClassUtil;
-import com.github.tornaia.jimglabel.gui.util.DetectedObjectUtil;
+import com.github.tornaia.jimglabel.gui.domain.EditableImage;
+import com.github.tornaia.jimglabel.gui.event.DetectedObjectSelectedEvent;
+import com.github.tornaia.jimglabel.gui.event.DetectedObjectsUpdatedEvent;
+import com.github.tornaia.jimglabel.gui.event.EditableImageEventPublisher;
+import com.github.tornaia.jimglabel.gui.event.EditableImageUpdatedEvent;
+import com.github.tornaia.jimglabel.gui.service.ImageEditorService;
+import com.github.tornaia.jimglabel.gui.service.OptimizeService;
 import com.github.tornaia.jimglabel.gui.util.FileUtil;
-import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
-import com.github.tornaia.jimglabel.gui.util.ObjectControl;
-import com.github.tornaia.jimglabel.gui.util.OptimizeImageUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileSystemView;
 import java.awt.*;
@@ -27,42 +25,31 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 @Component
 public class AppFrame {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AppFrame.class);
+    private final ImageEditorService imageEditorService;
+    private final OptimizeService optimizeService;
 
-    private static final String CLASSES_FILENAME = "!classes.json";
+    private EditableImage editableImage;
+    private DetectedObject selectedObject;
 
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final UserSettingsProvider userSettingsProvider;
     private final ApplicationSettings applicationSettings;
-    private final ClassUtil classUtil;
-    private final SerializerUtils serializerUtils;
-    private final UIUtils uiUtils;
+    private final EditableImageEventPublisher editableImageEventPublisher;
 
     private final JFrame jFrame;
+
     private JPanel imagePanel;
+    private EditableImagePanel editableImagePanel;
     private JLabel sourceValue;
     private JLabel targetValue;
     private JButton validateSourceButton;
@@ -73,31 +60,21 @@ public class AppFrame {
     private JButton deleteImageButton;
     private JScrollPane objectsScrollPanel;
 
-    private int currentImageIndex;
-    private String currentImageFileName;
-    private BufferedImage bufferedImage;
-    private int currentImageWidth;
-    private int currentImageHeight;
-    private List<DetectedObject> detectedObjects;
     private List<AutoCompleteComboBox> autoCompleteComboBoxes;
-    private DetectedObject selectedObject;
-    private ObjectControl selectedObjectControl;
-    private Point mousePressedPoint;
 
     @Autowired
-    public AppFrame(ApplicationEventPublisher applicationEventPublisher, UserSettingsProvider userSettingsProvider, ApplicationSettings applicationSettings, ClassUtil classUtil, SerializerUtils serializerUtils, UIUtils uiUtils) {
-        this.applicationEventPublisher = applicationEventPublisher;
-        this.userSettingsProvider = userSettingsProvider;
+    public AppFrame(ImageEditorService imageEditorService, OptimizeService optimizeService, ApplicationSettings applicationSettings, UIUtils uiUtils, EditableImageEventPublisher editableImageEventPublisher, ApplicationEventPublisher applicationEventPublisher) {
+        this.imageEditorService = imageEditorService;
+        this.optimizeService = optimizeService;
         this.applicationSettings = applicationSettings;
-        this.classUtil = classUtil;
-        this.serializerUtils = serializerUtils;
-        this.uiUtils = uiUtils;
+        this.editableImageEventPublisher = editableImageEventPublisher;
+        this.applicationEventPublisher = applicationEventPublisher;
         this.jFrame = new JFrame(String.format("%s (%s)", applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
         initComponents();
         Dimension screenSize = uiUtils.getScreenSize();
         jFrame.setMinimumSize(new Dimension(640, 360));
-        jFrame.setPreferredSize(new Dimension((int) (screenSize.width * 0.85D), (int) (screenSize.height * 0.85D)));
+        jFrame.setPreferredSize(new Dimension((int) (screenSize.width * 0.8D), (int) (screenSize.height * 0.8D)));
         jFrame.setSize(jFrame.getPreferredSize());
         jFrame.setLocation(screenSize.width / 2 - jFrame.getSize().width / 2, screenSize.height / 2 - jFrame.getSize().height / 2);
         jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -115,8 +92,6 @@ public class AppFrame {
         contentPanel.add(detailsPanel, BorderLayout.LINE_END);
 
         jFrame.setContentPane(contentPanel);
-
-        loadImage();
     }
 
     private JMenuBar createMenuBar() {
@@ -161,65 +136,62 @@ public class AppFrame {
     }
 
     private void selectSourceDirectory() {
-        String directory = userSettingsProvider.read().getSourceDirectory();
+        String directory = imageEditorService.getSourceDirectory();
         File fileChooserDirectory = directory != null && Files.isDirectory(Path.of(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
         JFileChooser directoryChooser = new JFileChooser(fileChooserDirectory);
         directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnValue = directoryChooser.showOpenDialog(jFrame);
         if (returnValue == JFileChooser.APPROVE_OPTION) {
             File selectedDirectory = directoryChooser.getSelectedFile();
-            userSettingsProvider.update(userSettings -> userSettings.setSourceDirectory(selectedDirectory.getAbsolutePath()));
+            imageEditorService.updateSourceDirectory(selectedDirectory.getAbsolutePath());
         }
-        currentImageIndex = -1;
-        loadNextImage();
     }
 
     private void selectTargetDirectory() {
-        String directory = userSettingsProvider.read().getTargetDirectory();
+        String directory = imageEditorService.getTargetDirectory();
         File fileChooserDirectory = directory != null && Files.isDirectory(Path.of(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
         JFileChooser directoryChooser = new JFileChooser(fileChooserDirectory);
         directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnValue = directoryChooser.showOpenDialog(jFrame);
         if (returnValue == JFileChooser.APPROVE_OPTION) {
             File selectedDirectory = directoryChooser.getSelectedFile();
-            userSettingsProvider.update(userSettings -> userSettings.setTargetDirectory(selectedDirectory.getAbsolutePath()));
+            imageEditorService.updateTargetDirectory(selectedDirectory.getAbsolutePath());
         }
-        loadImage();
     }
 
     private JPanel createImagePanel() {
-        this.imagePanel = new JPanel(new GridBagLayout());
+        imagePanel = new JPanel(new GridBagLayout());
         imagePanel.setBackground(Color.BLACK);
         return imagePanel;
     }
 
     private JPanel createDetailsPanel() {
-        // source, target, file
+        // meta
         JPanel top = new JPanel(new GridBagLayout());
         top.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         JLabel sourceLabel = new JLabel("Source");
-        this.sourceValue = new JLabel();
+        sourceValue = new JLabel();
         JLabel targetLabel = new JLabel("Target");
-        this.targetValue = new JLabel();
+        targetValue = new JLabel();
         JLabel fileLabel = new JLabel("File");
-        this.fileValue = new JLabel();
+        fileValue = new JLabel();
         JLabel resolutionLabel = new JLabel("Resolution");
-        this.resolutionValue = new JLabel();
+        resolutionValue = new JLabel();
         JLabel sizeLabel = new JLabel("Size");
-        this.sizeValue = new JLabel();
+        sizeValue = new JLabel();
         top.add(sourceLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(sourceValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
         top.add(targetLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
-        this.validateSourceButton = new JButton("Validate");
+        validateSourceButton = new JButton("Validate");
         validateSourceButton.setToolTipText("Validate source images");
         validateSourceButton.addActionListener(e -> validateSource());
         validateSourceButton.setEnabled(false);
         top.add(validateSourceButton, new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
-        this.generateImagesButton = new JButton("Generate");
+        generateImagesButton = new JButton("Generate");
         generateImagesButton.setToolTipText("Generates optimized images");
-        generateImagesButton.addActionListener(e -> generateImages(true));
+        generateImagesButton.addActionListener(e -> generateImages());
         generateImagesButton.setEnabled(false);
         top.add(generateImagesButton, new GridBagConstraints(1, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
 
@@ -231,7 +203,7 @@ public class AppFrame {
         top.add(sizeLabel, new GridBagConstraints(0, 6, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(sizeValue, new GridBagConstraints(1, 6, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
-        this.deleteImageButton = new JButton("Delete image");
+        deleteImageButton = new JButton("Delete image");
         deleteImageButton.setMnemonic(KeyEvent.VK_DELETE);
         deleteImageButton.setToolTipText("Delete image");
         deleteImageButton.addActionListener(e -> deleteImage());
@@ -243,10 +215,12 @@ public class AppFrame {
         JLabel detectedObjectsLabel = new JLabel("Detected object(s)");
         top.add(detectedObjectsLabel, new GridBagConstraints(0, 9, 2, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
+
         // objects
         objectsScrollPanel = new JScrollPane(new JPanel());
         objectsScrollPanel.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         objectsScrollPanel.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+
 
         // controls
         JPanel controlsPanel = new JPanel(new FlowLayout());
@@ -297,747 +271,60 @@ public class AppFrame {
     }
 
     private void validateSource() {
-        generateImages(false);
+        optimizeService.generateImages(false);
     }
 
-    private void generateImages(boolean writeToDisk) {
-        if (currentImageIndex == -1) {
-            loadNextImage();
-        }
-
-        if (currentImageIndex == -1) {
-            return;
-        }
-
-        String targetDirectory = userSettingsProvider.read().getTargetDirectory();
-        if (targetDirectory == null) {
-            JOptionPane.showMessageDialog(jFrame, "Configure target directory");
-            return;
-        }
-
-        Path targetDirectoryFile = Path.of(targetDirectory);
-        boolean targetDirectoryExist = Files.isDirectory(targetDirectoryFile);
-        String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
-        if (!targetDirectoryExist) {
-            JOptionPane.showMessageDialog(jFrame, targetDirectoryAbsolutePath + " not found");
-            return;
-        }
-
-        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
-
-        Path sourceClassesFile = Path.of(sourceDirectory).resolve(CLASSES_FILENAME);
-        Path targetClassesFile = Path.of(targetDirectory).resolve(CLASSES_FILENAME);
-        try {
-            Files.copy(sourceClassesFile, targetClassesFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-        LOG.info("Classes file under target directory is updated: {}", targetClassesFile);
-
-        loadImage();
-        new Thread(() -> {
-
-            int startedAt = currentImageIndex;
-            while (true) {
-                boolean success = generateNextInternal(writeToDisk, targetDirectoryFile);
-                if (!success) {
-                    return;
-                }
-
-                AtomicBoolean loading = new AtomicBoolean();
-
-                loading.set(true);
-                uiUtils.invokeLater("LoadNext", () -> {
-                    loadNextImage();
-                    loading.set(false);
-                });
-
-                AtomicBoolean interrupted = new AtomicBoolean();
-                while (loading.get()) {
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        LOG.error("Unexpected termination", e);
-                        interrupted.set(true);
-                        return;
-                    }
-                }
-
-                if (interrupted.get()) {
-                    return;
-                }
-
-                boolean done = startedAt == currentImageIndex;
-                if (done) {
-                    return;
-                }
-            }
-
-        }).start();
-    }
-
-    private boolean generateNextInternal(boolean writeToDisk, Path targetDirectoryFile) {
-        boolean noObject = detectedObjects.isEmpty();
-        if (noObject) {
-            JOptionPane.showMessageDialog(jFrame, "No object found on this image");
-            return false;
-        }
-
-        boolean multipleObjects = detectedObjects.size() > 1;
-        if (multipleObjects) {
-            JOptionPane.showMessageDialog(jFrame, "Multiple objects found on this image");
-            return false;
-        }
-
-        boolean missingName = detectedObjects
-                .stream()
-                .anyMatch(e -> Objects.isNull(e.getName()));
-        if (missingName) {
-            JOptionPane.showMessageDialog(jFrame, "Missing name for object");
-            return false;
-        }
-
-        if (writeToDisk) {
-            LOG.info("Generate optimized image of: {}", currentImageFileName);
-        } else {
-            LOG.info("Validate image: {}", currentImageFileName);
-        }
-
-        ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
-        if (optimizedImage == null) {
-            // get a message from optimize, whats the problem
-            JOptionPane.showMessageDialog(jFrame, "Problematic image");
-            return false;
-        }
-
-        if (writeToDisk) {
-            try {
-                String optimizedImageFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".jpg";
-                Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
-                ImageIO.write(optimizedImage.getImage(), "jpg", optimizedImagePath.toFile());
-                long size = Files.size(optimizedImagePath);
-                Path optimizedAnnotationPath = targetDirectoryFile.resolve(optimizedImageFileName.substring(0, optimizedImageFileName.lastIndexOf('.')) + ".json");
-                Annotation annotation = new Annotation(optimizedImageFileName, size, optimizedImage.getImage().getWidth(), optimizedImage.getImage().getHeight(), optimizedImage.getObjects());
-                String annotationContent = serializerUtils.toJSON(annotation);
-                Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
-            } catch (IOException e) {
-                throw new IllegalStateException("Must not happen", e);
-            }
-        }
-
-        return true;
+    private void generateImages() {
+        optimizeService.generateImages(true);
     }
 
     private void deleteImage() {
-        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
-        try {
-            Files.delete(Path.of(sourceDirectory).resolve(currentImageFileName));
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-        loadImage();
+        imageEditorService.deleteCurrentImage();
     }
 
     private void loadPreviousImage() {
-        currentImageIndex--;
-        loadImage();
+        imageEditorService.loadPreviousImage();
+    }
+
+    private void loadNextImage() {
+        imageEditorService.loadNextImage();
     }
 
     private void addNewObject() {
     }
 
     private void deleteObject() {
-        if (selectedObject != null) {
-            AppFrame.this.detectedObjects.remove(selectedObject);
-            updateAnnotationFile();
-            updateObjectsPanel();
-            imagePanel.repaint();
-        }
+        imageEditorService.deleteDetectedObject(selectedObject);
     }
 
     private void resetImage() {
-        detectedObjects.clear();
-        updateObjectsPanel();
-        updateAnnotationFile();
-        imagePanel.repaint();
+        imageEditorService.deleteAllObjects();
     }
 
-    private void loadNextImage() {
-        currentImageIndex++;
-        loadImage();
-    }
+    @EventListener(EditableImageUpdatedEvent.class)
+    public void onEditableImageUpdatedEvent(EditableImageUpdatedEvent event) {
+        editableImage = event.getEditableImage();
+        selectedObject = null;
 
-    private void loadImage() {
-        validateSourceButton.setEnabled(false);
-        generateImagesButton.setEnabled(false);
-        deleteImageButton.setEnabled(false);
+        String currentImageFileName = editableImage.getCurrentImageFileName();
+        BufferedImage bufferedImage = editableImage.getBufferedImage();
+        byte[] content = editableImage.getContent();
 
-        this.bufferedImage = null;
-        this.currentImageWidth = 0;
-        this.currentImageHeight = 0;
-        this.detectedObjects = null;
-        this.autoCompleteComboBoxes = null;
+        String sourceDirectory = imageEditorService.getSourceDirectory();
+        List<String> sourceImages = imageEditorService.getSourceImageFileNames();
+        sourceValue.setText(sourceDirectory != null ? sourceDirectory + " (" + sourceImages.size() + ")" : "<Select directory: ALT+S>");
+        String targetDirectory = imageEditorService.getTargetDirectory();
+        targetValue.setText(targetDirectory != null ? targetDirectory : "<Select directory: ALT+T>");
 
-        String targetDirectory = userSettingsProvider.read().getTargetDirectory();
-        if (targetDirectory == null) {
-            targetValue.setText("<Select directory: ALT+T>");
-        } else {
-            Path targetDirectoryFile = Path.of(targetDirectory);
-            boolean targetDirectoryExist = Files.isDirectory(targetDirectoryFile);
-            String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
-            if (targetDirectoryExist) {
-                targetValue.setText(targetDirectoryAbsolutePath);
-            } else {
-                targetValue.setText(targetDirectoryAbsolutePath + " not found");
-            }
-        }
+        jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, sourceImages.indexOf(currentImageFileName) + 1, sourceImages.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
-        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
-        if (sourceDirectory == null) {
-            this.currentImageIndex = -1;
-            sourceValue.setText("<Select directory: ALT+S>");
-            return;
-        }
-
-        Path sourceDirectoryFile = Path.of(sourceDirectory);
-        boolean sourceDirectoryExist = Files.isDirectory(sourceDirectoryFile);
-        String sourceDirectoryAbsolutePath = sourceDirectoryFile.toAbsolutePath().toString();
-        if (!sourceDirectoryExist) {
-            sourceValue.setText(sourceDirectoryAbsolutePath + " not found");
-            return;
-        }
-
-        List<String> imageFileNames;
-        try {
-            imageFileNames = Files.list(Path.of(sourceDirectory))
-                    .map(Path::getFileName)
-                    .map(Path::toString)
-                    .filter(e -> e.toLowerCase(Locale.ENGLISH).endsWith(".png") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpg") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpeg"))
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-
-        sourceValue.setText(sourceDirectoryAbsolutePath + " (" + imageFileNames.size() + " files)");
-
-        if (imageFileNames.isEmpty()) {
-            this.currentImageIndex = -1;
-            return;
-        }
-
-        if (currentImageIndex < 0) {
-            currentImageIndex = imageFileNames.size() - 1;
-        }
-
-        if (currentImageIndex >= imageFileNames.size()) {
-            currentImageIndex = 0;
-        }
-
-        this.currentImageFileName = imageFileNames.get(currentImageIndex);
-
-        jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, (currentImageIndex + 1), imageFileNames.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
-
-        Path currentImage = Path.of(sourceDirectory).resolve(currentImageFileName);
-        byte[] currentImageBytes;
-        try {
-            currentImageBytes = Files.readAllBytes(currentImage);
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-
-        try {
-            this.bufferedImage = ImageIO.read(new ByteArrayInputStream(currentImageBytes));
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-        this.currentImageWidth = bufferedImage.getWidth();
-        this.currentImageHeight = bufferedImage.getHeight();
-
+        editableImagePanel = new EditableImagePanel(editableImageEventPublisher, editableImage);
         imagePanel.removeAll();
-
-        Path annotationFile = getAnnotationFile();
-        boolean hasAnnotationFile = Files.isRegularFile(annotationFile);
-        Annotation annotation;
-        if (hasAnnotationFile) {
-            String annotationContent;
-            try {
-                annotationContent = Files.readString(annotationFile);
-            } catch (IOException e) {
-                throw new IllegalStateException("Must not happen", e);
-            }
-
-            annotation = serializerUtils.toObject(annotationContent, Annotation.class);
-        } else {
-            annotation = new Annotation(currentImageFileName, currentImageBytes.length, currentImageWidth, currentImageHeight, new ArrayList<>());
-        }
-        this.detectedObjects = annotation.getObjects();
-
-        JPanel image = new JPanel() {
-
-            private final AtomicReference<Point> currentPoint = new AtomicReference<>();
-            private final AtomicReference<Point> drawFrom = new AtomicReference<>();
-            private final AtomicReference<Point> drawTo = new AtomicReference<>();
-            private int targetWidth;
-            private int targetHeight;
-            private Image scaledImage;
-
-            {
-                this.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-
-                JPanel enclosingJPanel = this;
-
-                this.addMouseMotionListener(new MouseMotionAdapter() {
-                    @Override
-                    public void mouseDragged(MouseEvent e) {
-                        currentPoint.set(e.getPoint());
-
-                        if (selectedObjectControl != null) {
-                            detectedObjects.remove(AppFrame.this.selectedObject);
-                            if (selectedObjectControl == ObjectControl.TOP_LEFT ||
-                                    selectedObjectControl == ObjectControl.TOP_RIGHT ||
-                                    selectedObjectControl == ObjectControl.BOTTOM_LEFT ||
-                                    selectedObjectControl == ObjectControl.BOTTOM_RIGHT) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                float fartherX = Math.abs(px - left) < Math.abs(px - right) ? right : left;
-                                float fartherY = Math.abs(py - top) < Math.abs(py - bottom) ? bottom : top;
-                                drawFrom.set(new Point((int) fartherX, (int) fartherY));
-                                drawTo.set(e.getPoint());
-                                imagePanel.repaint();
-                            } else if (selectedObjectControl == ObjectControl.TOP) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                drawFrom.set(new Point((int) left, (int) bottom));
-                                drawTo.set(new Point((int) right, e.getY()));
-                                imagePanel.repaint();
-                            } else if (selectedObjectControl == ObjectControl.LEFT) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                drawFrom.set(new Point((int) right, (int) bottom));
-                                drawTo.set(new Point(e.getX(), (int) top));
-                                imagePanel.repaint();
-                            } else if (selectedObjectControl == ObjectControl.MOVE) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                int cx = e.getX();
-                                int cy = e.getY();
-                                top = top - (py - cy);
-                                right = right - (px - cx);
-                                bottom = bottom - (py - cy);
-                                left = left - (px - cx);
-
-                                int scaledImageWidth = scaledImage.getWidth(null);
-                                int scaledImageHeight = scaledImage.getHeight(null);
-                                if (left < 0) {
-                                    right += -left;
-                                    left = 0;
-                                }
-                                if (top < 0) {
-                                    bottom += -top;
-                                    top = 0;
-                                }
-                                if (right > scaledImageWidth - 1) {
-                                    left -= right - scaledImageWidth - 1;
-                                    right = scaledImageWidth - 1;
-                                }
-                                if (bottom > scaledImageHeight) {
-                                    top -= bottom - scaledImageHeight;
-                                    bottom = scaledImageHeight;
-                                }
-
-                                drawFrom.set(new Point((int) left, (int) top));
-                                drawTo.set(new Point((int) right, (int) bottom));
-                                imagePanel.repaint();
-                            } else if (selectedObjectControl == ObjectControl.RIGHT) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                drawFrom.set(new Point((int) left, (int) bottom));
-                                drawTo.set(new Point(e.getX(), (int) top));
-                                imagePanel.repaint();
-                            } else if (selectedObjectControl == ObjectControl.BOTTOM) {
-                                float top = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getTop();
-                                float right = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getRight();
-                                float bottom = scaledImage.getHeight(null) * AppFrame.this.selectedObject.getBottom();
-                                float left = scaledImage.getWidth(null) * AppFrame.this.selectedObject.getLeft();
-                                int px = mousePressedPoint.x;
-                                int py = mousePressedPoint.y;
-                                drawFrom.set(new Point((int) left, e.getY()));
-                                drawTo.set(new Point((int) right, (int) top));
-                                imagePanel.repaint();
-                            }
-                        } else {
-                            drawTo.set(e.getPoint());
-                            imagePanel.repaint();
-                        }
-                    }
-
-                    @Override
-                    public void mouseMoved(MouseEvent e) {
-                        Point point = e.getPoint();
-
-                        DetectedObject objectAtPoint = getObjectAtPoint(scaledImage, point);
-
-                        if (objectAtPoint != null) {
-                            boolean objectAtPointIsTheSelectedObject = objectAtPoint.equals(AppFrame.this.selectedObject);
-                            if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopLeftControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isTopRightControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isLeftControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isMoveControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isRightControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomLeftControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.SW_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject && DetectedObjectUtil.isBottomRightControl(scaledImage, objectAtPoint, point)) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR));
-                            } else if (objectAtPointIsTheSelectedObject) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-                            }
-                        } else {
-                            Optional<DetectedObject> optionalDetectedObject = getObject(scaledImage, point);
-                            if (optionalDetectedObject.isPresent()) {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                            } else {
-                                enclosingJPanel.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-                            }
-                        }
-
-                        // x-y-cross
-                        currentPoint.set(point);
-                        imagePanel.repaint();
-                    }
-                });
-                this.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        Point point = e.getPoint();
-                        Optional<DetectedObject> optionalDetectedObject = getObject(scaledImage, point);
-                        if (optionalDetectedObject.isPresent()) {
-                            List<DetectedObject> detectedObjects = AppFrame.this.detectedObjects;
-                            DetectedObject selectedObject = optionalDetectedObject.get();
-                            AppFrame.this.selectedObject = selectedObject;
-                            int itemIndex = detectedObjects.indexOf(selectedObject);
-                            if (itemIndex == -1) {
-                                throw new IllegalStateException("Must not happen");
-                            }
-                            AutoCompleteComboBox autoCompleteComboBox = AppFrame.this.autoCompleteComboBoxes.get(itemIndex);
-                            autoCompleteComboBox.requestFocus();
-                            imagePanel.repaint();
-                        }
-                    }
-
-                    @Override
-                    public void mousePressed(MouseEvent e) {
-                        Point point = e.getPoint();
-
-                        DetectedObject selectedObject = getObjectAtPoint(scaledImage, point);
-                        AppFrame.this.selectedObject = selectedObject;
-                        AppFrame.this.selectedObjectControl = DetectedObjectUtil.getSelectedObjectControl(scaledImage, selectedObject, point);
-                        AppFrame.this.mousePressedPoint = point;
-
-                        if (selectedObject == null) {
-                            drawFrom.set(e.getPoint());
-                        }
-
-                        imagePanel.repaint();
-                    }
-
-                    @Override
-                    public void mouseReleased(MouseEvent e) {
-                        Point from = drawFrom.get();
-                        Point to = drawTo.get();
-                        boolean clickedAndNotDragged = from != null && to == null;
-                        if (clickedAndNotDragged) {
-                            drawFrom.set(null);
-                            return;
-                        }
-
-                        int scaledImageWidth = scaledImage.getWidth(null);
-                        int scaledImageHeight = scaledImage.getHeight(null);
-                        Point c = new Point(Math.min(scaledImageWidth, Math.max(0, e.getX())), Math.min(scaledImageHeight, Math.max(0, e.getY())));
-                        String name = selectedObject != null ? selectedObject.getName() : null;
-
-                        if (selectedObjectControl == null ||
-                                selectedObjectControl == ObjectControl.TOP_LEFT ||
-                                selectedObjectControl == ObjectControl.TOP_RIGHT ||
-                                selectedObjectControl == ObjectControl.BOTTOM_LEFT ||
-                                selectedObjectControl == ObjectControl.BOTTOM_RIGHT) {
-                            if (from != null) {
-                                int fromX = from.x;
-                                int fromY = from.y;
-                                int toX = c.x;
-                                int toY = c.y;
-                                int x = Math.min(fromX, toX);
-                                int y = Math.min(fromY, toY);
-                                int width = Math.abs(toX - fromX);
-                                int height = Math.abs(toY - fromY);
-                                float top = (float) y / scaledImageHeight;
-                                float right = (float) (x + width) / scaledImageWidth;
-                                float bottom = (float) (y + height) / scaledImageHeight;
-                                float left = (float) x / scaledImageWidth;
-                                detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        } else if (selectedObjectControl == ObjectControl.MOVE) {
-                            if (from != null) {
-                                int fromX = from.x;
-                                int fromY = from.y;
-                                int toX = to.x;
-                                int toY = to.y;
-                                float top = (float) fromY / scaledImageHeight;
-                                float right = (float) toX / scaledImageWidth;
-                                float bottom = (float) toY / scaledImageHeight;
-                                float left = (float) fromX / scaledImageWidth;
-                                detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        } else if (selectedObjectControl == ObjectControl.TOP) {
-                            if (from != null) {
-                                float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
-                                float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
-                                float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                                detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        } else if (selectedObjectControl == ObjectControl.LEFT) {
-                            if (from != null) {
-                                float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
-                                float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
-                                float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                                detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        } else if (selectedObjectControl == ObjectControl.RIGHT) {
-                            if (from != null) {
-                                float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
-                                float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
-                                float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                                detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        } else if (selectedObjectControl == ObjectControl.BOTTOM) {
-                            if (from != null) {
-                                float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
-                                float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
-                                float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                                detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
-                                updateObjectsPanel();
-
-                                drawFrom.set(null);
-                                drawTo.set(null);
-                                imagePanel.repaint();
-                            }
-                        }
-
-                        selectedObject = null;
-                        selectedObjectControl = null;
-                        mousePressedPoint = null;
-
-                        updateAnnotationFile();
-                    }
-
-                    @Override
-                    public void mouseExited(MouseEvent mouseEvent) {
-                        currentPoint.set(null);
-                        imagePanel.repaint();
-                    }
-                });
-            }
-
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-
-                // image
-                int imagePanelWidth = (int) imagePanel.getSize().getWidth();
-                int imagePanelHeight = (int) imagePanel.getSize().getHeight();
-                double scale = Math.max(1, Math.max((double) currentImageWidth / imagePanelWidth, (double) currentImageHeight / imagePanelHeight));
-                int targetWidth = (int) (currentImageWidth / scale);
-                int targetHeight = (int) (currentImageHeight / scale);
-                if (this.targetWidth != targetWidth || this.targetHeight != targetHeight) {
-                    this.targetWidth = targetWidth;
-                    this.targetHeight = targetHeight;
-                    this.scaledImage = bufferedImage.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH);
-                    setPreferredSize(new Dimension(targetWidth, targetHeight));
-                    imagePanel.revalidate();
-                }
-                g.drawImage(scaledImage, 0, 0, null);
-
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setStroke(new BasicStroke(2));
-
-                // object rectangles
-                AppFrame.this.detectedObjects.forEach(e -> {
-                    Point cp = currentPoint.get();
-                    float top = e.getTop();
-                    float right = e.getRight();
-                    float bottom = e.getBottom();
-                    float left = e.getLeft();
-                    int x = (int) (this.targetWidth * left);
-                    int y = (int) (this.targetHeight * top);
-                    int width = (int) (this.targetWidth * (right - left));
-                    int height = (int) (this.targetHeight * (bottom - top));
-                    boolean currentObjectIsSelected = e == AppFrame.this.selectedObject;
-                    boolean currentObjectIsUnderMouse = cp != null && e.equals(getObject(scaledImage, cp).orElse(null));
-                    Color color = currentObjectIsSelected ? new Color(255, 8, 0) : currentObjectIsUnderMouse ? new Color(255, 64, 56) : new Color(205, 92, 92);
-                    g.setColor(color);
-                    g.drawRect(x, y, width, height);
-
-                    if (currentObjectIsSelected) {
-                        // draw controls for corners and edges: top-left, top, top-right, left, right, bottom-left, bottom, bottom-right
-                        int controlEdgeSize = DetectedObjectUtil.CONTROL_SIZE_RADIUS * 2 + 1;
-                        // top-left
-                        {
-                            int cx = Math.max(0, x - controlEdgeSize / 2);
-                            int cy = Math.max(0, y - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // top
-                        {
-                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                            int cy = Math.max(0, y - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // top-right
-                        {
-                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                            int cy = Math.max(0, y - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // left
-                        {
-                            int cx = Math.max(0, x - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // center
-                        {
-                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // right
-                        {
-                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height / 2 - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // bottom-left
-                        {
-                            int cx = Math.max(0, x - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // bottom
-                        {
-                            int cx = Math.max(0, x + width / 2 - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                        // bottom-right
-                        {
-                            int cx = Math.max(0, x + width - controlEdgeSize / 2);
-                            int cy = Math.max(0, y + height - controlEdgeSize / 2);
-                            int cw = Math.min(controlEdgeSize, this.targetWidth - cx);
-                            int ch = Math.min(controlEdgeSize, this.targetHeight - cy);
-                            g.drawRect(cx, cy, cw, ch);
-                        }
-                    }
-                });
-
-                Point from = drawFrom.get();
-                Point to = drawTo.get();
-                Point cp = currentPoint.get();
-                if (from != null && to != null) {
-                    // new rectangle
-                    int fromX = from.x;
-                    int fromY = from.y;
-                    int toX = to.x;
-                    int toY = to.y;
-                    int x = Math.min(fromX, toX);
-                    int y = Math.min(fromY, toY);
-                    int width = Math.abs(toX - fromX);
-                    int height = Math.abs(toY - fromY);
-                    g.setColor(new Color(0, 8, 255));
-                    g.drawRect(x, y, width, height);
-                } else if (cp != null) {
-                    // x-y-cross
-                    g.setColor(new Color(255, 8, 0));
-                    g.drawLine(0, (int) cp.getY(), this.scaledImage.getWidth(null), (int) cp.getY());
-                    g.drawLine((int) cp.getX(), 0, (int) cp.getX(), this.scaledImage.getHeight(null));
-                }
-
-            }
-        };
-        imagePanel.add(image);
-        image.revalidate();
+        imagePanel.add(editableImagePanel);
 
         fileValue.setText(currentImageFileName);
-        resolutionValue.setText(String.format("%s x %s", currentImageWidth, currentImageHeight));
-        sizeValue.setText(FileUtil.readableFileSize(currentImageBytes.length));
+        resolutionValue.setText(String.format("%s x %s", bufferedImage.getWidth(), bufferedImage.getHeight()));
+        sizeValue.setText(FileUtil.readableFileSize(content.length));
         deleteImageButton.setEnabled(true);
         validateSourceButton.setEnabled(true);
         generateImagesButton.setEnabled(true);
@@ -1045,10 +332,31 @@ public class AppFrame {
         updateObjectsPanel();
     }
 
-    private void updateObjectsPanel() {
-        List<String> classList = classUtil.getClasses();
+    @EventListener(DetectedObjectSelectedEvent.class)
+    public void onDetectedObjectSelectedEvent(DetectedObjectSelectedEvent event) {
+        selectedObject = event.getDetectedObject();
+        if (selectedObject != null) {
+            List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
+            int itemIndex = detectedObjects.indexOf(selectedObject);
+            AutoCompleteComboBox autoCompleteComboBox = autoCompleteComboBoxes.get(itemIndex);
+            if (!autoCompleteComboBox.getEditor().getEditorComponent().hasFocus()) {
+                autoCompleteComboBox.requestFocus();
+            }
+        }
 
-        this.autoCompleteComboBoxes = new ArrayList<>();
+        editableImagePanel.onDetectedObjectSelectedEvent(event);
+    }
+
+    @EventListener(DetectedObjectsUpdatedEvent.class)
+    public void onDetectedObjectsUpdatedEvent() {
+        updateObjectsPanel();
+    }
+
+    private void updateObjectsPanel() {
+        List<String> classes = this.imageEditorService.getClasses();
+
+        autoCompleteComboBoxes = new ArrayList<>();
+        List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
 
         JPanel nestedObjectsPanel = new JPanel();
         nestedObjectsPanel.setLayout(new BoxLayout(nestedObjectsPanel, BoxLayout.Y_AXIS));
@@ -1058,42 +366,39 @@ public class AppFrame {
 
             JPanel objectPanel = new JPanel(new GridBagLayout());
 
-            // index, object class combobox
             JLabel indexLabel = new JLabel("" + (i + 1));
             objectPanel.add(indexLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
-            objectClassComboBox = new AutoCompleteComboBox(classList.toArray(new String[0]));
+            objectClassComboBox = new AutoCompleteComboBox(classes.toArray(new String[0]));
             objectClassComboBox.getEditor().getEditorComponent().addFocusListener(new FocusListener() {
                 @Override
                 public void focusGained(FocusEvent e) {
-                    selectedObject = detectedObject;
-                    imagePanel.repaint();
+                    editableImageEventPublisher.selectDetectedObject(detectedObject);
                 }
 
                 @Override
                 public void focusLost(FocusEvent e) {
-                    selectedObject = null;
-                    imagePanel.repaint();
+                    editableImageEventPublisher.selectDetectedObject(null);
                 }
             });
 
-            this.autoCompleteComboBoxes.add(objectClassComboBox);
+            autoCompleteComboBoxes.add(objectClassComboBox);
             objectClassComboBox.addActionListener(e -> {
                 JComboBox<?> source = (JComboBox<?>) e.getSource();
                 String selectedItem = (String) source.getSelectedItem();
-                selectedItem = classList.contains(selectedItem) ? selectedItem : null;
+                selectedItem = classes.contains(selectedItem) ? selectedItem : null;
                 boolean changed = !Objects.equals(selectedItem, detectedObject.getName());
                 if (changed) {
-                    detectedObject.setName(selectedItem);
-                    AppFrame.this.updateAnnotationFile();
+                    imageEditorService.updateDetectedObjectName(detectedObject, selectedItem);
                 }
             });
-            objectClassComboBox.setSelectedIndex(classList.indexOf(detectedObject.getName()));
+            objectClassComboBox.setSelectedIndex(classes.indexOf(detectedObject.getName()));
             objectPanel.add(objectClassComboBox, new GridBagConstraints(1, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
             // area
-            double imageArea = currentImageWidth * currentImageHeight;
-            double objectArea = ((detectedObject.getRight() - detectedObject.getLeft()) * currentImageWidth) * ((detectedObject.getBottom() - detectedObject.getTop()) * currentImageHeight);
+            BufferedImage bufferedImage = editableImage.getBufferedImage();
+            double imageArea = bufferedImage.getWidth() * bufferedImage.getHeight();
+            double objectArea = ((detectedObject.getRight() - detectedObject.getLeft()) * bufferedImage.getWidth()) * ((detectedObject.getBottom() - detectedObject.getTop()) * bufferedImage.getHeight());
             double areaPercentage = (objectArea / imageArea) * 100D;
             objectPanel.add(new JLabel("Area"), new GridBagConstraints(0, 2, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
             objectPanel.add(new JLabel(String.format("%.2f%%", areaPercentage)), new GridBagConstraints(1, 2, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 4, 0, 0), 0, 0));
@@ -1121,53 +426,6 @@ public class AppFrame {
             objectClassComboBox.requestFocusInWindow();
         }
     }
-
-    private void updateAnnotationFile() {
-        Path annotationFile = getAnnotationFile();
-        long size = 0;
-        if (Files.isRegularFile(annotationFile)) {
-            try {
-                size = Files.size(annotationFile);
-            } catch (IOException e) {
-                throw new IllegalStateException("Must not happen", e);
-            }
-        }
-
-        String annotationFileName = annotationFile.getFileName().toString();
-        Annotation annotation = new Annotation(annotationFileName, size, currentImageWidth, currentImageHeight, detectedObjects);
-        String annotationFileContent = serializerUtils.toJSON(annotation);
-        try {
-            Files.writeString(annotationFile, annotationFileContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-        LOG.info("Annotation file updated: {}, length: {}", annotationFile, annotation.getObjects());
-    }
-
-    private Path getAnnotationFile() {
-        String directory = userSettingsProvider.read().getSourceDirectory();
-        String annotationFileName = this.currentImageFileName.substring(0, this.currentImageFileName.lastIndexOf('.')) + ".json";
-        return Path.of(directory).resolve(annotationFileName);
-    }
-
-    private Optional<DetectedObject> getObject(Image scaledImage, Point point) {
-        return detectedObjects
-                .stream()
-                .filter(object -> DetectedObjectUtil.isObjectArea(scaledImage, object, point))
-                .findFirst();
-    }
-
-    private DetectedObject getObjectAtPoint(Image scaledImage, Point point) {
-        DetectedObject selectedObject = null;
-        for (DetectedObject object : detectedObjects) {
-            boolean selected = DetectedObjectUtil.isSelected(scaledImage, object, point);
-            if (selected) {
-                selectedObject = object;
-            }
-        }
-        return selectedObject;
-    }
-
 
     private void bringFrameToFront() {
         jFrame.setState(JFrame.NORMAL);

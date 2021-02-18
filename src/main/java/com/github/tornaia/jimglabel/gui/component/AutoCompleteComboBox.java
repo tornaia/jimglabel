@@ -5,6 +5,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.plaf.basic.BasicComboBoxEditor;
 import java.awt.*;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.text.Normalizer;
@@ -59,57 +61,55 @@ public class AutoCompleteComboBox extends JComboBox<String> {
 
             textField.addKeyListener(new KeyAdapter() {
                 public void keyReleased(KeyEvent keyEvent) {
-                    char key = keyEvent.getKeyChar();
+                    int keyCode = keyEvent.getKeyCode();
 
                     String text = textField.getText();
 
-                    if (key == KeyEvent.VK_ENTER) {
+                    if (keyCode == KeyEvent.VK_ENTER) {
                         String[] matchingItems = getMatchingItems(text);
                         if (matchingItems.length > 0) {
-                            AutoCompleteComboBox.this.setModel(new DefaultComboBoxModel<>(matchingItems));
-                            AutoCompleteComboBox.this.setSelectedItem(matchingItems[0]);
-                            AutoCompleteComboBox.this.hidePopup();
+                            setModel(new DefaultComboBoxModel<>(matchingItems));
+                            setSelectedItem(matchingItems[0]);
+                            hidePopup();
                             textField.moveCaretPosition(textField.getText().length());
                             textField.selectAll();
                         } else {
                             setSelectedIndex(-1);
-                            AutoCompleteComboBox.this.hidePopup();
+                            hidePopup();
                         }
                         return;
-                    } else if (key == KeyEvent.VK_ESCAPE) {
+                    } else if (keyCode == KeyEvent.VK_ESCAPE) {
                         setSelectedIndex(-1);
-                        AutoCompleteComboBox.this.hidePopup();
+                        hidePopup();
                         return;
-                    } else if (key == KeyEvent.VK_BACK_SPACE) {
+                    } else if (keyCode == KeyEvent.VK_BACK_SPACE) {
                         int selectionStart = textField.getSelectionStart();
                         text = text.substring(0, selectionStart);
                         String[] matchingItems = getMatchingItems(text);
-                        AutoCompleteComboBox.this.setModel(new DefaultComboBoxModel<>(matchingItems));
-                        setSelectedIndex(-1);
+                        setModel(new DefaultComboBoxModel<>(matchingItems));
+                         setSelectedIndex(-1);
                         textField.setText(text);
-                        AutoCompleteComboBox.this.showPopup();
+                        showPopup();
                         return;
-                    } else if (key == KeyEvent.VK_DELETE) {
+                    } else if (keyCode == KeyEvent.VK_DELETE) {
                         String[] matchingItems = getMatchingItems(text);
-                        AutoCompleteComboBox.this.setModel(new DefaultComboBoxModel<>(matchingItems));
+                        setModel(new DefaultComboBoxModel<>(matchingItems));
                         setSelectedIndex(-1);
-                        AutoCompleteComboBox.this.showPopup();
+                        showPopup();
                         return;
                     }
 
-                    if (!Character.isLetterOrDigit(key) && !Character.isSpaceChar(key)) {
+                    if (!Character.isLetterOrDigit(keyCode) && !Character.isSpaceChar(keyCode)) {
                         return;
                     }
-
-                    AutoCompleteComboBox.this.showPopup();
 
                     String[] matchingItems = getMatchingItems(text);
                     if (matchingItems.length > 0) {
-                        AutoCompleteComboBox.this.setModel(new DefaultComboBoxModel<>(matchingItems));
-                        AutoCompleteComboBox.this.setSelectedItem(text);
-                        AutoCompleteComboBox.this.showPopup();
+                        setModel(new DefaultComboBoxModel<>(matchingItems));
+                        setSelectedItem(text);
+                        showPopup();
                     } else {
-                        AutoCompleteComboBox.this.hidePopup();
+                        hidePopup();
                     }
                 }
 
@@ -131,7 +131,8 @@ public class AutoCompleteComboBox extends JComboBox<String> {
     @Override
     public void paint(Graphics g) {
         super.paint(g);
-        if (textField.getText().isEmpty()) {
+        String text = textField.getText();
+        if (text.isEmpty()) {
             textField.setText("Select one");
             textField.selectAll();
         }

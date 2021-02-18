@@ -2,7 +2,7 @@ package com.github.tornaia.jimglabel.gui.domain;
 
 import java.util.List;
 
-public class ClassesFile {
+public class Classes {
 
     private List<Class> classes;
 
