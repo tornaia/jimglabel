@@ -5,7 +5,7 @@ import com.github.tornaia.jimglabel.common.setting.ApplicationSettings;
 import com.github.tornaia.jimglabel.common.util.UIUtils;
 import com.github.tornaia.jimglabel.gui.component.AutoCompleteComboBox;
 import com.github.tornaia.jimglabel.gui.component.EditableImagePanel;
-import com.github.tornaia.jimglabel.gui.domain.AutoCompleteItem;
+import com.github.tornaia.jimglabel.gui.component.AutoCompleteItem;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
 import com.github.tornaia.jimglabel.gui.event.DetectedObjectSelectedEvent;

@@ -2,7 +2,7 @@ package com.github.tornaia.jimglabel.gui.service;
 
 import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
-import com.github.tornaia.jimglabel.gui.domain.Classes;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
 import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
@@ -65,7 +65,7 @@ public class OptimizeService {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        List<Classes.Class> classes = imageEditorService.getClasses();
+        List<ObjectClasses.Class> classes = imageEditorService.getClasses();
 
         Map<String, Set<String>> generatedImagesPerClasses = new HashMap<>();
         Consumer<EditableImage> optimizer = e -> generateNextInternal(e, writeToDisk, Path.of(targetDirectory), classes, generatedImagesPerClasses);
@@ -76,7 +76,7 @@ public class OptimizeService {
         }
     }
 
-    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path targetDirectoryFile, List<Classes.Class> classes, Map<String, Set<String>> generatedImagesPerClasses) {
+    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path targetDirectoryFile, List<ObjectClasses.Class> classes, Map<String, Set<String>> generatedImagesPerClasses) {
         List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
 
         boolean noObject = detectedObjects.isEmpty();
@@ -107,7 +107,7 @@ public class OptimizeService {
         }
 
         DetectedObject detectedObject = optimizedImage.getObjects().get(0);
-        Classes.Class detectedObjectClass = classes
+        ObjectClasses.Class detectedObjectClass = classes
                 .stream()
                 .filter(e -> e.getId().equals(detectedObject.getId()))
                 .findFirst()
@@ -139,7 +139,7 @@ public class OptimizeService {
         }
     }
 
-    private void splitGeneratedImages(Path targetDirectory, Map<String, Set<String>> generatedImagesPerClasses, double testRatio, List<Classes.Class> classes) {
+    private void splitGeneratedImages(Path targetDirectory, Map<String, Set<String>> generatedImagesPerClasses, double testRatio, List<ObjectClasses.Class> classes) {
         Path trainDirectory = targetDirectory.resolve("train");
         Path testDirectory = targetDirectory.resolve("test");
 
@@ -203,14 +203,14 @@ public class OptimizeService {
         return imageFileName.substring(0, imageFileName.lastIndexOf('.')) + ".xml";
     }
 
-    private String createXmlContent(Path targetDirectory, String type, Annotation annotation, List<Classes.Class> classes) {
+    private String createXmlContent(Path targetDirectory, String type, Annotation annotation, List<ObjectClasses.Class> classes) {
         String filename = annotation.getName();
         String path = targetDirectory.resolve(type).toAbsolutePath().toString();
         int width = annotation.getWidth();
         int height = annotation.getHeight();
         List<DetectedObject> objects = annotation.getObjects();
         DetectedObject object = objects.get(0);
-        Classes.Class xxxxx = classes.stream()
+        ObjectClasses.Class xxxxx = classes.stream()
                 .filter(e -> e.getId().equals(object.getId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Must"));

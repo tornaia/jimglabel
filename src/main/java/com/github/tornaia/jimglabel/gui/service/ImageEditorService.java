@@ -4,7 +4,7 @@ import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.common.setting.UserSettings;
 import com.github.tornaia.jimglabel.common.setting.UserSettingsProvider;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
-import com.github.tornaia.jimglabel.gui.domain.Classes;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
 import com.github.tornaia.jimglabel.gui.event.EditableImageEventPublisher;
@@ -34,7 +34,7 @@ public class ImageEditorService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ImageEditorService.class);
 
-    private static final String CLASSES_FILENAME = "!classes.json";
+    private static final String CLASSES_FILENAME = "!object-classes.json";
 
     private final UserSettingsProvider userSettingsProvider;
     private final EditableImageEventPublisher editableImageEventPublisher;
@@ -128,7 +128,7 @@ public class ImageEditorService {
         }
     }
 
-    public List<Classes.Class> getClasses() {
+    public List<ObjectClasses.Class> getClasses() {
         UserSettings userSettings = userSettingsProvider.read();
         String sourceDirectory = userSettings.getSourceDirectory();
         Path classesJsonPath = Path.of(sourceDirectory).resolve(CLASSES_FILENAME);
@@ -140,8 +140,8 @@ public class ImageEditorService {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        Classes classes = serializerUtils.toObject(classesFileContent, Classes.class);
-        return classes.getClasses();
+        ObjectClasses objectClasses = serializerUtils.toObject(classesFileContent, ObjectClasses.class);
+        return objectClasses.getClasses();
     }
 
     public List<String> getSourceImageFileNames() {
@@ -242,8 +242,8 @@ public class ImageEditorService {
         }
 
         String objectId = detectedObjects.size() > 0 ? detectedObjects.get(0).getId() : null;
-        List<Classes.Class> classes = getClasses();
-        Classes.Class objectClass = classes
+        List<ObjectClasses.Class> classes = getClasses();
+        ObjectClasses.Class objectClass = classes
                 .stream()
                 .filter(e -> e.getId().equals(objectId))
                 .findFirst()

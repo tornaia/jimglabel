@@ -1,4 +1,4 @@
-package com.github.tornaia.jimglabel.gui.domain;
+package com.github.tornaia.jimglabel.gui.component;
 
 import java.util.Objects;
 

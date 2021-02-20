@@ -1,7 +1,5 @@
 package com.github.tornaia.jimglabel.gui.component;
 
-import com.github.tornaia.jimglabel.gui.domain.AutoCompleteItem;
-
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
