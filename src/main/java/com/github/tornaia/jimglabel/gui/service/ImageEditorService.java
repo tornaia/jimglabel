@@ -248,8 +248,9 @@ public class ImageEditorService {
                 .filter(e -> e.getId().equals(objectId))
                 .findFirst()
                 .orElse(null);
-        String objectName = objectClass != null ? objectClass.getName() : null;
-        LOG.info("Annotation file updated: {}, object: {}", annotationFile, objectName);
+        String classId = objectClass != null ? objectClass.getId() : null;
+        String className = objectClass != null ? objectClass.getName() : null;
+        LOG.info("Annotation file updated: {}, objectName: {} ({})", annotationFile, className, classId);
     }
 
     public void forEachImage(Consumer<EditableImage> optimizer) {

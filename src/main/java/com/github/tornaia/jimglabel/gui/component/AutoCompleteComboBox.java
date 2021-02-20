@@ -132,16 +132,7 @@ public class AutoCompleteComboBox extends JComboBox<AutoCompleteItem> {
                         return;
                     }
 
-                    boolean navigating = keyCode == KeyEvent.VK_UP || keyCode == KeyEvent.VK_DOWN || keyCode == KeyEvent.VK_PAGE_UP || keyCode == KeyEvent.VK_PAGE_DOWN;
-                    if (navigating) {
-                        return;
-                    }
-
-                    if (keyCode == KeyEvent.VK_CONTROL) {
-                        return;
-                    }
-
-                    if (keyCode == KeyEvent.VK_A && (keyEvent.getModifiersEx() & KeyEvent.CTRL_DOWN_MASK) != 0) {
+                    if (!Character.isLetterOrDigit(keyCode) && !Character.isSpaceChar(keyCode)) {
                         return;
                     }
 
@@ -149,7 +140,6 @@ public class AutoCompleteComboBox extends JComboBox<AutoCompleteItem> {
                     Object item = getEditor().getItem();
                     model.removeAllElements();
                     model.addAll(Arrays.asList(matchingItems));
-                    setSelectedItem(null);
                     getEditor().setItem(item);
                     if (matchingItems.length > 0) {
                         showPopup();
