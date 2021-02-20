@@ -64,6 +64,7 @@ public class AutoCompleteComboBox extends JComboBox<AutoCompleteItem> {
         }
     }
 
+    @Override
     public void setEditor(ComboBoxEditor editor) {
         super.setEditor(editor);
 
