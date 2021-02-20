@@ -224,7 +224,7 @@ public class EditableImagePanel extends JPanel {
                 int scaledImageWidth = scaledImage.getWidth(null);
                 int scaledImageHeight = scaledImage.getHeight(null);
                 Point c = new Point(Math.min(scaledImageWidth, Math.max(0, e.getX())), Math.min(scaledImageHeight, Math.max(0, e.getY())));
-                String name = selectedObject != null ? selectedObject.getName() : null;
+                String id = selectedObject != null ? selectedObject.getId() : null;
 
                 if (selectedObjectControl == null ||
                         selectedObjectControl == ObjectControl.TOP_LEFT ||
@@ -244,7 +244,7 @@ public class EditableImagePanel extends JPanel {
                         float right = (float) (x + width) / scaledImageWidth;
                         float bottom = (float) (y + height) / scaledImageHeight;
                         float left = (float) x / scaledImageWidth;
-                        detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
+                        detectedObjects.add(new DetectedObject(id, top, right, bottom, left));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;
@@ -261,7 +261,7 @@ public class EditableImagePanel extends JPanel {
                         float right = (float) toX / scaledImageWidth;
                         float bottom = (float) toY / scaledImageHeight;
                         float left = (float) fromX / scaledImageWidth;
-                        detectedObjects.add(new DetectedObject(name, top, right, bottom, left));
+                        detectedObjects.add(new DetectedObject(id, top, right, bottom, left));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;
@@ -273,7 +273,7 @@ public class EditableImagePanel extends JPanel {
                         float originalBottom = (scaledImage.getHeight(null) * selectedObject.getBottom());
                         float top = (c.y < originalBottom) ? (float) c.y / scaledImage.getHeight(null) : originalBottom / scaledImage.getHeight(null);
                         float bottom = (c.y < originalBottom) ? originalBottom / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                        detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                        detectedObjects.add(new DetectedObject(id, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;
@@ -285,7 +285,7 @@ public class EditableImagePanel extends JPanel {
                         float originalRight = (scaledImage.getWidth(null) * selectedObject.getRight());
                         float left = (c.x < originalRight) ? (float) c.x / scaledImage.getWidth(null) : originalRight / scaledImage.getWidth(null);
                         float right = (c.x < originalRight) ? originalRight / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                        detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                        detectedObjects.add(new DetectedObject(id, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;
@@ -297,7 +297,7 @@ public class EditableImagePanel extends JPanel {
                         float originalLeft = (scaledImage.getWidth(null) * selectedObject.getLeft());
                         float left = (c.x < originalLeft) ? (float) c.x / scaledImage.getWidth(null) : originalLeft / scaledImage.getWidth(null);
                         float right = (c.x < originalLeft) ? originalLeft / scaledImage.getWidth(null) : (float) c.x / scaledImage.getWidth(null);
-                        detectedObjects.add(new DetectedObject(name, selectedObject.getTop(), right, selectedObject.getBottom(), left));
+                        detectedObjects.add(new DetectedObject(id, selectedObject.getTop(), right, selectedObject.getBottom(), left));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;
@@ -309,7 +309,7 @@ public class EditableImagePanel extends JPanel {
                         float originalTop = (scaledImage.getHeight(null) * selectedObject.getTop());
                         float top = (c.y < originalTop) ? (float) c.y / scaledImage.getHeight(null) : originalTop / scaledImage.getHeight(null);
                         float bottom = (c.y < originalTop) ? originalTop / scaledImage.getHeight(null) : (float) c.y / scaledImage.getHeight(null);
-                        detectedObjects.add(new DetectedObject(name, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
+                        detectedObjects.add(new DetectedObject(id, top, selectedObject.getRight(), bottom, selectedObject.getLeft()));
                         editableImageEventPublisher.updateDetectedObjects();
 
                         drawFrom = null;

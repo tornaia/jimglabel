@@ -34,7 +34,7 @@ public class ImageEditorService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ImageEditorService.class);
 
-    public static final String CLASSES_FILENAME = "!classes.json";
+    private static final String CLASSES_FILENAME = "!classes.json";
 
     private final UserSettingsProvider userSettingsProvider;
     private final EditableImageEventPublisher editableImageEventPublisher;
@@ -89,8 +89,8 @@ public class ImageEditorService {
         editableImageEventPublisher.updateDetectedObjects();
     }
 
-    public void updateDetectedObjectName(DetectedObject detectedObject, String newName) {
-        detectedObject.setName(newName);
+    public void updateDetectedObjectName(DetectedObject detectedObject, String newId) {
+        detectedObject.setId(newId);
         updateAnnotationFile();
     }
 
@@ -128,7 +128,7 @@ public class ImageEditorService {
         }
     }
 
-    public List<String> getClasses() {
+    public List<Classes.Class> getClasses() {
         UserSettings userSettings = userSettingsProvider.read();
         String sourceDirectory = userSettings.getSourceDirectory();
         Path classesJsonPath = Path.of(sourceDirectory).resolve(CLASSES_FILENAME);
@@ -141,11 +141,7 @@ public class ImageEditorService {
         }
 
         Classes classes = serializerUtils.toObject(classesFileContent, Classes.class);
-        return classes
-                .getClasses()
-                .stream()
-                .map(Classes.Class::getName)
-                .collect(Collectors.toList());
+        return classes.getClasses();
     }
 
     public List<String> getSourceImageFileNames() {
@@ -158,7 +154,7 @@ public class ImageEditorService {
             return Files.list(Path.of(sourceDirectory))
                     .map(Path::getFileName)
                     .map(Path::toString)
-                    .filter(e -> e.toLowerCase(Locale.ENGLISH).endsWith(".png") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpg") || e.toLowerCase(Locale.ENGLISH).endsWith(".jpeg"))
+                    .filter(e -> e.toLowerCase(Locale.ENGLISH).endsWith(".jpg"))
                     .collect(Collectors.toList());
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
@@ -244,7 +240,16 @@ public class ImageEditorService {
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
-        LOG.info("Annotation file updated: {}, object: {}", annotationFile, detectedObjects.size() > 0 ? detectedObjects.get(0).getName() : null);
+
+        String objectId = detectedObjects.size() > 0 ? detectedObjects.get(0).getId() : null;
+        List<Classes.Class> classes = getClasses();
+        Classes.Class objectClass = classes
+                .stream()
+                .filter(e -> e.getId().equals(objectId))
+                .findFirst()
+                .orElse(null);
+        String objectName = objectClass != null ? objectClass.getName() : null;
+        LOG.info("Annotation file updated: {}, object: {}", annotationFile, objectName);
     }
 
     public void forEachImage(Consumer<EditableImage> optimizer) {

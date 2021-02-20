@@ -5,6 +5,7 @@ import com.github.tornaia.jimglabel.common.setting.ApplicationSettings;
 import com.github.tornaia.jimglabel.common.util.UIUtils;
 import com.github.tornaia.jimglabel.gui.component.AutoCompleteComboBox;
 import com.github.tornaia.jimglabel.gui.component.EditableImagePanel;
+import com.github.tornaia.jimglabel.gui.domain.AutoCompleteItem;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
 import com.github.tornaia.jimglabel.gui.event.DetectedObjectSelectedEvent;
@@ -32,6 +33,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Component
 public class AppFrame {
@@ -353,7 +355,11 @@ public class AppFrame {
     }
 
     private void updateObjectsPanel() {
-        List<String> classes = this.imageEditorService.getClasses();
+        List<AutoCompleteItem> autoCompleteItems = imageEditorService
+                .getClasses()
+                .stream()
+                .map(e -> new AutoCompleteItem(e.getId(), e.getCardId() + " " + e.getName()))
+                .collect(Collectors.toList());
 
         autoCompleteComboBoxes = new ArrayList<>();
         List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
@@ -369,7 +375,7 @@ public class AppFrame {
             JLabel indexLabel = new JLabel("" + (i + 1));
             objectPanel.add(indexLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
 
-            objectClassComboBox = new AutoCompleteComboBox(classes.toArray(new String[0]));
+            objectClassComboBox = new AutoCompleteComboBox(autoCompleteItems.toArray(new AutoCompleteItem[0]));
             objectClassComboBox.getEditor().getEditorComponent().addFocusListener(new FocusListener() {
                 @Override
                 public void focusGained(FocusEvent e) {
@@ -385,14 +391,16 @@ public class AppFrame {
             autoCompleteComboBoxes.add(objectClassComboBox);
             objectClassComboBox.addActionListener(e -> {
                 JComboBox<?> source = (JComboBox<?>) e.getSource();
-                String selectedItem = (String) source.getSelectedItem();
-                selectedItem = classes.contains(selectedItem) ? selectedItem : null;
-                boolean changed = !Objects.equals(selectedItem, detectedObject.getName());
+                AutoCompleteItem selectedItem = (AutoCompleteItem) source.getSelectedItem();
+                selectedItem = autoCompleteItems.contains(selectedItem) ? selectedItem : null;
+                boolean changed = !Objects.equals(selectedItem != null ? selectedItem.getId() : null, detectedObject.getId());
                 if (changed) {
-                    imageEditorService.updateDetectedObjectName(detectedObject, selectedItem);
+                    imageEditorService.updateDetectedObjectName(detectedObject, selectedItem != null ? selectedItem.getId() : null);
                 }
             });
-            objectClassComboBox.setSelectedIndex(classes.indexOf(detectedObject.getName()));
+
+            int selectedIndex = autoCompleteItems.stream().map(AutoCompleteItem::getId).collect(Collectors.toList()).indexOf(detectedObject.getId());
+            objectClassComboBox.setSelectedIndex(selectedIndex);
             objectPanel.add(objectClassComboBox, new GridBagConstraints(1, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
             // area

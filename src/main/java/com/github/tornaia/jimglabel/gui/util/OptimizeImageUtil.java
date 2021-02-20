@@ -73,7 +73,7 @@ public final class OptimizeImageUtil {
             float top = (y0 - cropY0) / (float) resultImage.getHeight();
             float bottom = (y1 - cropY0) / (float) resultImage.getHeight();
 
-            resultObjects.add(new DetectedObject(object.getName(), top, right, bottom, left));
+            resultObjects.add(new DetectedObject(object.getId(), top, right, bottom, left));
         }
 
         return new ImageWithMeta(resultImage, resultObjects);
@@ -145,7 +145,7 @@ public final class OptimizeImageUtil {
             float top = (y0 - cropY0) / (float) resultImage.getHeight();
             float bottom = (y1 - cropY0) / (float) resultImage.getHeight();
 
-            resultObjects.add(new DetectedObject(object.getName(), top, right, bottom, left));
+            resultObjects.add(new DetectedObject(object.getId(), top, right, bottom, left));
         }
 
         return new ImageWithMeta(resultImage, resultObjects);
