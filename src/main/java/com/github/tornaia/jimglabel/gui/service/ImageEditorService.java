@@ -61,8 +61,8 @@ public class ImageEditorService {
         editableImageEventPublisher.updateSelectedImage(editableImage);
     }
 
-    public void updateTargetDirectory(String absolutePath) {
-        userSettingsProvider.update(userSettings -> userSettings.setTargetDirectory(absolutePath));
+    public void updateWorkspaceDirectory(String absolutePath) {
+        userSettingsProvider.update(userSettings -> userSettings.setWorkspaceDirectory(absolutePath));
     }
 
     public void deleteCurrentImage() {
@@ -116,15 +116,15 @@ public class ImageEditorService {
         return sourceDirectoryExist ? sourceDirectoryAbsolutePath : null;
     }
 
-    public String getTargetDirectory() {
-        String targetDirectory = userSettingsProvider.read().getTargetDirectory();
-        if (targetDirectory == null) {
+    public String getWorkspaceDirectory() {
+        String workspaceDirectory = userSettingsProvider.read().getWorkspaceDirectory();
+        if (workspaceDirectory == null) {
             return null;
         } else {
-            Path targetDirectoryFile = Path.of(targetDirectory);
-            boolean targetDirectoryExist = Files.isDirectory(targetDirectoryFile);
-            String targetDirectoryAbsolutePath = targetDirectoryFile.toAbsolutePath().toString();
-            return targetDirectoryExist ? targetDirectoryAbsolutePath : null;
+            Path workspaceDirectoryFile = Path.of(workspaceDirectory);
+            boolean workspaceDirectoryExist = Files.isDirectory(workspaceDirectoryFile);
+            String workspaceDirectoryAbsolutePath = workspaceDirectoryFile.toAbsolutePath().toString();
+            return workspaceDirectoryExist ? workspaceDirectoryAbsolutePath : null;
         }
     }
 

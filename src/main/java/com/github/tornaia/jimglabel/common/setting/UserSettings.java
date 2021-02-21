@@ -6,7 +6,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 public class UserSettings extends AbstractSettings {
 
     private String sourceDirectory;
-    private String targetDirectory;
+    private String workspaceDirectory;
 
     public UserSettings() {
     }
@@ -19,12 +19,12 @@ public class UserSettings extends AbstractSettings {
         this.sourceDirectory = sourceDirectory;
     }
 
-    public String getTargetDirectory() {
-        return targetDirectory;
+    public String getWorkspaceDirectory() {
+        return workspaceDirectory;
     }
 
-    public void setTargetDirectory(String targetDirectory) {
-        this.targetDirectory = targetDirectory;
+    public void setWorkspaceDirectory(String workspaceDirectory) {
+        this.workspaceDirectory = workspaceDirectory;
     }
 
     @Override
@@ -32,7 +32,7 @@ public class UserSettings extends AbstractSettings {
         return new ToStringBuilder("UserSettings", ToStringStyle.JSON_STYLE)
                 .append("UserSettings", "")
                 .append("sourceDirectory", sourceDirectory)
-                .append("targetDirectory", targetDirectory)
+                .append("workspaceDirectory", workspaceDirectory)
                 .toString();
     }
 }

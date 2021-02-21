@@ -2,9 +2,9 @@ package com.github.tornaia.jimglabel.gui.service;
 
 import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
-import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
 import com.github.tornaia.jimglabel.gui.util.OptimizeImageUtil;
 import org.apache.commons.io.FileUtils;
@@ -37,6 +37,12 @@ public class OptimizeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OptimizeService.class);
 
+    private static final String ANNOTATIONS_DIRECTORY = "annotations";
+    private static final String IMAGES_DIRECTORY = "images";
+    private static final String TRAIN_DIRECTORY = "train";
+    private static final String TEST_DIRECTORY = "test";
+    private static final String LABEL_MAP_FILENAME = "label_map.pbtxt";
+
     private final ImageEditorService imageEditorService;
     private final SerializerUtils serializerUtils;
 
@@ -53,14 +59,17 @@ public class OptimizeService {
             return;
         }
 
-        String targetDirectory = imageEditorService.getTargetDirectory();
-        if (targetDirectory == null) {
+        String workspaceDirectory = imageEditorService.getWorkspaceDirectory();
+        if (workspaceDirectory == null) {
             // JOptionPane.showMessageDialog(jFrame, "Configure target directory");
             return;
         }
 
         try {
-            FileUtils.cleanDirectory(Path.of(targetDirectory).toFile());
+            Files.createDirectories(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY));
+            FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY).toFile());
+            Files.createDirectories(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY));
+            FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY).toFile());
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
@@ -68,15 +77,16 @@ public class OptimizeService {
         List<ObjectClasses.Class> classes = imageEditorService.getClasses();
 
         Map<String, Set<String>> generatedImagesPerClasses = new HashMap<>();
-        Consumer<EditableImage> optimizer = e -> generateNextInternal(e, writeToDisk, Path.of(targetDirectory), classes, generatedImagesPerClasses);
+        Consumer<EditableImage> optimizer = e -> generateNextInternal(e, writeToDisk, Path.of(workspaceDirectory), classes, generatedImagesPerClasses);
         imageEditorService.forEachImage(optimizer);
 
         if (writeToDisk) {
-            splitGeneratedImages(Path.of(targetDirectory), generatedImagesPerClasses, 0.2D, classes);
+            splitGeneratedImages(Path.of(workspaceDirectory), generatedImagesPerClasses, 0.2D, classes);
         }
+        generateLabelMap(Path.of(workspaceDirectory), classes, writeToDisk);
     }
 
-    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path targetDirectoryFile, List<ObjectClasses.Class> classes, Map<String, Set<String>> generatedImagesPerClasses) {
+    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path workspaceDirectoryFile, List<ObjectClasses.Class> classes, Map<String, Set<String>> generatedImagesPerClasses) {
         List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
 
         boolean noObject = detectedObjects.isEmpty();
@@ -129,8 +139,8 @@ public class OptimizeService {
 
         if (writeToDisk) {
             try {
-                Path optimizedImagePath = targetDirectoryFile.resolve(optimizedImageFileName);
-                Path optimizedAnnotationPath = targetDirectoryFile.resolve(getJsonFileName(optimizedImageFileName));
+                Path optimizedImagePath = workspaceDirectoryFile.resolve(IMAGES_DIRECTORY).resolve(optimizedImageFileName);
+                Path optimizedAnnotationPath = workspaceDirectoryFile.resolve(IMAGES_DIRECTORY).resolve(getJsonFileName(optimizedImageFileName));
                 Files.write(optimizedImagePath, optimizedImageContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
                 Files.writeString(optimizedAnnotationPath, annotationContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
             } catch (IOException e) {
@@ -139,9 +149,9 @@ public class OptimizeService {
         }
     }
 
-    private void splitGeneratedImages(Path targetDirectory, Map<String, Set<String>> generatedImagesPerClasses, double testRatio, List<ObjectClasses.Class> classes) {
-        Path trainDirectory = targetDirectory.resolve("train");
-        Path testDirectory = targetDirectory.resolve("test");
+    private void splitGeneratedImages(Path workspaceDirectory, Map<String, Set<String>> generatedImagesPerClasses, double testRatio, List<ObjectClasses.Class> classes) {
+        Path trainDirectory = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(TRAIN_DIRECTORY);
+        Path testDirectory = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(TEST_DIRECTORY);
 
         try {
             Files.createDirectory(trainDirectory);
@@ -164,10 +174,10 @@ public class OptimizeService {
             for (int i = 0; i < testCount; i++) {
                 String testImageFileName = images.remove(0);
                 try {
-                    Files.move(targetDirectory.resolve(testImageFileName), testDirectory.resolve(testImageFileName));
-                    Annotation annotation = serializerUtils.toObject(Files.readString(targetDirectory.resolve(getJsonFileName(testImageFileName))), Annotation.class);
-                    Path annotationFile = testDirectory.resolve(getJsonFileName(testImageFileName));
-                    Files.writeString(testDirectory.resolve(getXmlFileName(testImageFileName)), createXmlContent(targetDirectory, "test", annotation, classes));
+                    Files.move(workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(testImageFileName), testDirectory.resolve(testImageFileName));
+                    Annotation annotation = serializerUtils.toObject(Files.readString(workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(getJsonFileName(testImageFileName))), Annotation.class);
+                    Path annotationFile = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(getJsonFileName(testImageFileName));
+                    Files.writeString(testDirectory.resolve(getXmlFileName(testImageFileName)), createXmlContent(workspaceDirectory, "test", annotation, classes));
                     Files.delete(annotationFile);
                 } catch (IOException e) {
                     throw new IllegalStateException("Must not happen", e);
@@ -176,10 +186,10 @@ public class OptimizeService {
 
             images.forEach(trainImageFileName -> {
                 try {
-                    Files.move(targetDirectory.resolve(trainImageFileName), trainDirectory.resolve(trainImageFileName));
-                    Annotation annotation = serializerUtils.toObject(Files.readString(targetDirectory.resolve(getJsonFileName(trainImageFileName))), Annotation.class);
-                    Path annotationFile = testDirectory.resolve(getJsonFileName(trainImageFileName));
-                    Files.writeString(trainDirectory.resolve(getXmlFileName(trainImageFileName)), createXmlContent(targetDirectory, "train", annotation, classes));
+                    Files.move(workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(trainImageFileName), trainDirectory.resolve(trainImageFileName));
+                    Annotation annotation = serializerUtils.toObject(Files.readString(workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(getJsonFileName(trainImageFileName))), Annotation.class);
+                    Path annotationFile = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(getJsonFileName(trainImageFileName));
+                    Files.writeString(trainDirectory.resolve(getXmlFileName(trainImageFileName)), createXmlContent(workspaceDirectory, "train", annotation, classes));
                     Files.delete(annotationFile);
                 } catch (IOException e) {
                     throw new IllegalStateException("Must not happen", e);
@@ -203,23 +213,23 @@ public class OptimizeService {
         return imageFileName.substring(0, imageFileName.lastIndexOf('.')) + ".xml";
     }
 
-    private String createXmlContent(Path targetDirectory, String type, Annotation annotation, List<ObjectClasses.Class> classes) {
+    private String createXmlContent(Path workspaceDirectory, String type, Annotation annotation, List<ObjectClasses.Class> classes) {
         String filename = annotation.getName();
-        String path = targetDirectory.resolve(type).toAbsolutePath().toString();
+        String path = workspaceDirectory.resolve(type).resolve(filename).toAbsolutePath().toString();
         int width = annotation.getWidth();
         int height = annotation.getHeight();
         List<DetectedObject> objects = annotation.getObjects();
         DetectedObject object = objects.get(0);
-        ObjectClasses.Class xxxxx = classes.stream()
+        ObjectClasses.Class objectClass = classes.stream()
                 .filter(e -> e.getId().equals(object.getId()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Must"));
+                .orElseThrow(() -> new IllegalStateException("Failed to find class for id: " + object.getId()));
 
-        String objectName = "lofasz";
-        int xmin = -1;
-        int ymin = -1;
-        int xmax = -1;
-        int ymax = -1;
+        String objectName = objectClass.getId();
+        int xmin = Math.round(object.getLeft() * width);
+        int ymin = Math.round(object.getTop() * height);
+        int xmax = Math.round(object.getRight() * width);
+        int ymax = Math.round(object.getBottom() * height);
 
         return "<annotation>" + System.lineSeparator() +
                 "\t<folder>" + type + "</folder>" + System.lineSeparator() + //
@@ -247,5 +257,30 @@ public class OptimizeService {
                 "\t\t</bndbox>" + System.lineSeparator() +
                 "\t</object>" + System.lineSeparator() +
                 "</annotation>" + System.lineSeparator();
+    }
+
+    private void generateLabelMap(Path workspaceDirectory, List<ObjectClasses.Class> classes, boolean writeToDisk) {
+        Path labelMapPath = workspaceDirectory.resolve(ANNOTATIONS_DIRECTORY).resolve(LABEL_MAP_FILENAME);
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < classes.size(); i++) {
+            ObjectClasses.Class objectClass = classes.get(i);
+            String entry =
+                    "item {" + System.lineSeparator() +
+                            "  id: " + (i + 1) + System.lineSeparator() +
+                            "  name: '" + objectClass.getId() + "'" + System.lineSeparator() +
+                            "}" + System.lineSeparator() +
+                            "" + System.lineSeparator();
+            sb.append(entry);
+        }
+        String labelMapContent = sb.toString().trim();
+
+        if (writeToDisk) {
+            try {
+                Files.writeString(labelMapPath, labelMapContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
+            }
+        }
     }
 }

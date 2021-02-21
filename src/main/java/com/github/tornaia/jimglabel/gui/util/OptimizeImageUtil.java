@@ -132,13 +132,10 @@ public final class OptimizeImageUtil {
 
         List<DetectedObject> resultObjects = new ArrayList<>();
         for (DetectedObject object : objects) {
-            int x0 = (int) (object.getLeft() * bufferedImage.getWidth());
-            int x1 = (int) (object.getRight() * bufferedImage.getWidth());
-            int y0 = (int) (object.getTop() * bufferedImage.getHeight());
-            int y1 = (int) (object.getBottom() * bufferedImage.getHeight());
-            if (x0 < cropX0 || x1 > cropX0 + cropWidth || y0 < cropY0 || y1 > cropY0 + cropHeight) {
-                throw new IllegalStateException("Must not happen, object is outside of cropped area");
-            }
+            int x0 = Math.max(cropX0, (int) (object.getLeft() * bufferedImage.getWidth()));
+            int x1 = Math.min(cropX0 +cropWidth, (int) (object.getRight() * bufferedImage.getWidth()));
+            int y0 = Math.max(cropY0, (int) (object.getTop() * bufferedImage.getHeight()));
+            int y1 = Math.min(cropY0 + cropHeight, (int) (object.getBottom() * bufferedImage.getHeight()));
 
             float left = (x0 - cropX0) / (float) resultImage.getWidth();
             float right = (x1 - cropX0) / (float) resultImage.getWidth();

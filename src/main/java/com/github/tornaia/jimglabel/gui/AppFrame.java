@@ -53,7 +53,7 @@ public class AppFrame {
     private JPanel imagePanel;
     private EditableImagePanel editableImagePanel;
     private JLabel sourceValue;
-    private JLabel targetValue;
+    private JLabel workspaceValue;
     private JButton validateSourceButton;
     private JButton generateImagesButton;
     private JLabel fileValue;
@@ -115,10 +115,10 @@ public class AppFrame {
         menuItem.addActionListener(e -> selectSourceDirectory());
         menu.add(menuItem);
 
-        // File > Open target directory
-        menuItem = new JMenuItem("Open target directory", KeyEvent.VK_T);
-        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.ALT_DOWN_MASK));
-        menuItem.addActionListener(e -> selectTargetDirectory());
+        // File > Open workspace directory
+        menuItem = new JMenuItem("Open workspace directory", KeyEvent.VK_W);
+        menuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.ALT_DOWN_MASK));
+        menuItem.addActionListener(e -> selectWorkspaceDirectory());
         menu.add(menuItem);
 
         menu.addSeparator();
@@ -149,15 +149,15 @@ public class AppFrame {
         }
     }
 
-    private void selectTargetDirectory() {
-        String directory = imageEditorService.getTargetDirectory();
+    private void selectWorkspaceDirectory() {
+        String directory = imageEditorService.getWorkspaceDirectory();
         File fileChooserDirectory = directory != null && Files.isDirectory(Path.of(directory)) ? new File(directory) : FileSystemView.getFileSystemView().getHomeDirectory();
         JFileChooser directoryChooser = new JFileChooser(fileChooserDirectory);
         directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnValue = directoryChooser.showOpenDialog(jFrame);
         if (returnValue == JFileChooser.APPROVE_OPTION) {
             File selectedDirectory = directoryChooser.getSelectedFile();
-            imageEditorService.updateTargetDirectory(selectedDirectory.getAbsolutePath());
+            imageEditorService.updateWorkspaceDirectory(selectedDirectory.getAbsolutePath());
         }
     }
 
@@ -173,8 +173,8 @@ public class AppFrame {
         top.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         JLabel sourceLabel = new JLabel("Source");
         sourceValue = new JLabel();
-        JLabel targetLabel = new JLabel("Target");
-        targetValue = new JLabel();
+        JLabel workspaceLabel = new JLabel("Workspace");
+        workspaceValue = new JLabel();
         JLabel fileLabel = new JLabel("File");
         fileValue = new JLabel();
         JLabel resolutionLabel = new JLabel("Resolution");
@@ -183,8 +183,8 @@ public class AppFrame {
         sizeValue = new JLabel();
         top.add(sourceLabel, new GridBagConstraints(0, 0, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
         top.add(sourceValue, new GridBagConstraints(1, 0, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
-        top.add(targetLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
-        top.add(targetValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
+        top.add(workspaceLabel, new GridBagConstraints(0, 1, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0));
+        top.add(workspaceValue, new GridBagConstraints(1, 1, 1, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(4, 16, 0, 0), 0, 0));
 
         validateSourceButton = new JButton("Validate");
         validateSourceButton.setToolTipText("Validate source images");
@@ -315,8 +315,8 @@ public class AppFrame {
         String sourceDirectory = imageEditorService.getSourceDirectory();
         List<String> sourceImages = imageEditorService.getSourceImageFileNames();
         sourceValue.setText(sourceDirectory != null ? sourceDirectory + " (" + sourceImages.size() + ")" : "<Select directory: ALT+S>");
-        String targetDirectory = imageEditorService.getTargetDirectory();
-        targetValue.setText(targetDirectory != null ? targetDirectory : "<Select directory: ALT+T>");
+        String workspaceDirectory = imageEditorService.getWorkspaceDirectory();
+        workspaceValue.setText(workspaceDirectory != null ? workspaceDirectory : "<Select directory: ALT+W>");
 
         jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, sourceImages.indexOf(currentImageFileName) + 1, sourceImages.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
