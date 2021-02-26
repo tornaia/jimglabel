@@ -133,7 +133,7 @@ public final class OptimizeImageUtil {
         List<DetectedObject> resultObjects = new ArrayList<>();
         for (DetectedObject object : objects) {
             int x0 = Math.max(cropX0, (int) (object.getLeft() * bufferedImage.getWidth()));
-            int x1 = Math.min(cropX0 +cropWidth, (int) (object.getRight() * bufferedImage.getWidth()));
+            int x1 = Math.min(cropX0 + cropWidth, (int) (object.getRight() * bufferedImage.getWidth()));
             int y0 = Math.max(cropY0, (int) (object.getTop() * bufferedImage.getHeight()));
             int y1 = Math.min(cropY0 + cropHeight, (int) (object.getBottom() * bufferedImage.getHeight()));
 
