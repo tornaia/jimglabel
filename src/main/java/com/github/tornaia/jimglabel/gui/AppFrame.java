@@ -15,6 +15,7 @@ import com.github.tornaia.jimglabel.gui.event.EditableImageUpdatedEvent;
 import com.github.tornaia.jimglabel.gui.service.ImageEditorService;
 import com.github.tornaia.jimglabel.gui.service.OptimizeService;
 import com.github.tornaia.jimglabel.gui.util.FileUtil;
+import com.github.tornaia.jimglabel.tf.TFService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,7 @@ public class AppFrame {
 
     private final ImageEditorService imageEditorService;
     private final OptimizeService optimizeService;
+    private final TFService tfService;
 
     private EditableImage editableImage;
     private DetectedObject selectedObject;
@@ -60,14 +62,16 @@ public class AppFrame {
     private JLabel resolutionValue;
     private JLabel sizeValue;
     private JButton deleteImageButton;
+    private JToggleButton analyzeImageButton;
     private JScrollPane objectsScrollPanel;
 
     private List<AutoCompleteComboBox> autoCompleteComboBoxes;
 
     @Autowired
-    public AppFrame(ImageEditorService imageEditorService, OptimizeService optimizeService, ApplicationSettings applicationSettings, UIUtils uiUtils, EditableImageEventPublisher editableImageEventPublisher, ApplicationEventPublisher applicationEventPublisher) {
+    public AppFrame(ImageEditorService imageEditorService, OptimizeService optimizeService, TFService tfService, ApplicationSettings applicationSettings, UIUtils uiUtils, EditableImageEventPublisher editableImageEventPublisher, ApplicationEventPublisher applicationEventPublisher) {
         this.imageEditorService = imageEditorService;
         this.optimizeService = optimizeService;
+        this.tfService = tfService;
         this.applicationSettings = applicationSettings;
         this.editableImageEventPublisher = editableImageEventPublisher;
         this.applicationEventPublisher = applicationEventPublisher;
@@ -212,6 +216,13 @@ public class AppFrame {
         deleteImageButton.registerKeyboardAction(e -> deleteImage(), KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, KeyEvent.ALT_DOWN_MASK), JComponent.WHEN_IN_FOCUSED_WINDOW);
         deleteImageButton.setEnabled(false);
         top.add(deleteImageButton, new GridBagConstraints(0, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 0, 0), 0, 0));
+
+        analyzeImageButton = new JToggleButton("Analyze image");
+        analyzeImageButton.addActionListener(e -> analyzeImage());
+        analyzeImageButton.setEnabled(false);
+        top.add(analyzeImageButton, new GridBagConstraints(1, 7, 1, 1, 0.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 16, 0, 0), 0, 0));
+
+
         top.add(new JSeparator(), new GridBagConstraints(0, 8, 2, 1, 1.0D, 0.0D, GridBagConstraints.LINE_START, GridBagConstraints.HORIZONTAL, new Insets(16, 0, 16, 0), 0, 0));
 
         JLabel detectedObjectsLabel = new JLabel("Detected object(s)");
@@ -284,6 +295,11 @@ public class AppFrame {
         imageEditorService.deleteCurrentImage();
     }
 
+    private void analyzeImage() {
+        editableImage.getTensorFlowDetections().clear();
+        editableImageEventPublisher.updateSelectedImage(editableImage);
+    }
+
     private void loadPreviousImage() {
         imageEditorService.loadPreviousImage();
     }
@@ -320,14 +336,19 @@ public class AppFrame {
 
         jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, sourceImages.indexOf(currentImageFileName) + 1, sourceImages.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
-        editableImagePanel = new EditableImagePanel(editableImageEventPublisher, editableImage);
+        boolean analyzeImage = analyzeImageButton.isSelected();
+        editableImagePanel = new EditableImagePanel(editableImageEventPublisher, editableImage, tfService, analyzeImage);
         imagePanel.removeAll();
         imagePanel.add(editableImagePanel);
+        imagePanel.revalidate();
+        imagePanel.repaint();
+        editableImagePanel.repaint();
 
         fileValue.setText(currentImageFileName);
         resolutionValue.setText(String.format("%s x %s", bufferedImage.getWidth(), bufferedImage.getHeight()));
         sizeValue.setText(FileUtil.readableFileSize(content.length));
         deleteImageButton.setEnabled(true);
+        analyzeImageButton.setEnabled(true);
         validateSourceButton.setEnabled(true);
         generateImagesButton.setEnabled(true);
 

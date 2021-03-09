@@ -6,6 +6,8 @@ import com.github.tornaia.jimglabel.gui.event.DetectedObjectSelectedEvent;
 import com.github.tornaia.jimglabel.gui.event.EditableImageEventPublisher;
 import com.github.tornaia.jimglabel.gui.util.DetectedObjectUtil;
 import com.github.tornaia.jimglabel.gui.util.ObjectControl;
+import com.github.tornaia.jimglabel.tf.Detection;
+import com.github.tornaia.jimglabel.tf.TFService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,10 +17,15 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.WritableRaster;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class EditableImagePanel extends JPanel {
+
+    private static final float MIN_SCORE = 0.50F;
 
     private final EditableImage editableImage;
 
@@ -33,8 +40,33 @@ public class EditableImagePanel extends JPanel {
 
     private ObjectControl selectedObjectControl;
 
-    public EditableImagePanel(EditableImageEventPublisher editableImageEventPublisher, EditableImage editableImage) {
+    public EditableImagePanel(EditableImageEventPublisher editableImageEventPublisher, EditableImage editableImage, TFService tfService, boolean analyzeImage) {
         this.editableImage = editableImage;
+
+        if (analyzeImage) {
+            if (editableImage.getTensorFlowDetections().isEmpty()) {
+                BufferedImage clonedBufferedImage = deepCopy(editableImage.getBufferedImage());
+                new Thread(() -> {
+                    List<Detection> tensorFlowDetections = tfService.detect(clonedBufferedImage);
+                    List<Detection> filteredTensorFlowDetections = tensorFlowDetections
+                            .stream()
+                            .filter(e -> e.getScore() > MIN_SCORE)
+                            .collect(Collectors.toList());
+                    if (filteredTensorFlowDetections.isEmpty()) {
+                        Detection notGoodEnoughButStillTheBest = tensorFlowDetections.get(0);
+                        if (notGoodEnoughButStillTheBest.getScore() > 0.02F){
+                            filteredTensorFlowDetections.add(notGoodEnoughButStillTheBest);
+                        }
+                    }
+                    editableImage.getTensorFlowDetections().addAll(filteredTensorFlowDetections);
+                    System.out.println("Found " + filteredTensorFlowDetections.size() + " candidates");
+                    for (Detection filteredTensorFlowDetection : filteredTensorFlowDetections) {
+                        System.out.println("\t\t" + filteredTensorFlowDetection);
+                    }
+                    repaint();
+                }).start();
+            }
+        }
 
         setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
 
@@ -364,6 +396,35 @@ public class EditableImagePanel extends JPanel {
         }
         g.drawImage(scaledImage, 0, 0, null);
 
+
+        // tensor flow rectangles
+        List<Detection> tensorFlowDetections = editableImage.getTensorFlowDetections();
+        tensorFlowDetections.forEach(e -> {
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            float top = e.getTop();
+            float right = e.getRight();
+            float bottom = e.getBottom();
+            float left = e.getLeft();
+            int x = (int) (targetWidth * left);
+            int y = (int) (targetHeight * top);
+            int width = (int) (targetWidth * (right - left));
+            int height = (int) (targetHeight * (bottom - top));
+            g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0));
+            g2d.setPaint(Color.RED);
+            g.setColor(Color.RED);
+            g.drawRect(x, y, width, height);
+
+            g2d.setFont(new Font("Serif", Font.BOLD, 18));
+            FontMetrics fm = g2d.getFontMetrics();
+
+            String label = e.getLabel() + " " + String.format("%.4f", e.getScore());
+            g2d.drawString(label, x + 4, Math.max(fm.getHeight(), y + fm.getHeight()));
+        });
+
+
         Graphics2D g2 = (Graphics2D) g;
         g2.setStroke(new BasicStroke(2));
 
@@ -499,5 +560,12 @@ public class EditableImagePanel extends JPanel {
             }
         }
         return selectedObject;
+    }
+
+    private static BufferedImage deepCopy(BufferedImage bi) {
+        ColorModel cm = bi.getColorModel();
+        boolean isAlphaPremultiplied = cm.isAlphaPremultiplied();
+        WritableRaster raster = bi.copyData(null);
+        return new BufferedImage(cm, raster, isAlphaPremultiplied, null);
     }
 }

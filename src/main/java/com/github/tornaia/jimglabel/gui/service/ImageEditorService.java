@@ -195,7 +195,7 @@ public class ImageEditorService {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        editableImage = new EditableImage(currentImageFileName, bufferedImage, new ArrayList<>(), content);
+        editableImage = new EditableImage(currentImageFileName, bufferedImage, new ArrayList<>(), new ArrayList<>(), content);
         Annotation annotation = getAnnotation(content, bufferedImage);
         editableImage.getDetectedObjects().addAll(annotation.getObjects());
 

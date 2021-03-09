@@ -112,9 +112,6 @@ public class OptimizeService {
 
         BufferedImage bufferedImage = editableImage.getBufferedImage();
         ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
-        if (optimizedImage == null) {
-            throw new IllegalStateException("Problematic image");
-        }
 
         DetectedObject detectedObject = optimizedImage.getObjects().get(0);
         ObjectClasses.Class detectedObjectClass = classes

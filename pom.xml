@@ -39,6 +39,7 @@
         <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
 
         <spring-boot.version>2.4.2</spring-boot.version>
+        <tensorflow-core-platform.version>0.2.0</tensorflow-core-platform.version>
         <commons-lang3.version>3.11</commons-lang3.version>
         <commons-io.version>2.8.0</commons-io.version>
     </properties>
@@ -93,6 +94,20 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
+        <!-- CPU -->
+        <!--dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow-core-platform</artifactId>
+            <version>${tensorflow-core-platform.version}</version>
+        </dependency-->
+
+        <!-- GPU - does not work atm: 2020-12-09 10:16:57.610277: W external/org_tensorflow/tensorflow/core/framework/op_kernel.cc:1744] OP_REQUIRES failed at conv_ops_fused_impl.h:702 : Unimplemented: Fusion is not implemented: [BiasAdd,Add] -->
+        <dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow-core-platform-gpu</artifactId>
+            <version>${tensorflow-core-platform.version}</version>
         </dependency>
 
         <dependency>

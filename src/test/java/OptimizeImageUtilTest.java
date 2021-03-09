@@ -1,6 +1,6 @@
 import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
-import com.github.tornaia.jimglabel.gui.util.CutUtil;
+import com.github.tornaia.jimglabel.gui.util.OptimizeImageUtil;
 import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
 import org.junit.jupiter.api.Test;
 
@@ -10,13 +10,14 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class CutUtilTest {
+public class OptimizeImageUtilTest {
 
+    /*
     @Test
     public void middle() throws Exception {
         BufferedImage originalBufferedImage = ImageIO.read(new File(("C:/temp/1.original.jpg")));
         Annotation originalAnnotation = new SerializerUtils().toObject(Files.readString(Path.of("C:/temp/1.original.json")), Annotation.class);
-        ImageWithMeta result = CutUtil.getOptimizedImage(new ImageWithMeta(originalBufferedImage, originalAnnotation.getObjects()));
+        ImageWithMeta result = OptimizeImageUtil.optimize(new ImageWithMeta(originalBufferedImage, originalAnnotation.getObjects()));
 
         writeToDisk(result, "4.result");
     }
@@ -29,4 +30,5 @@ public class CutUtilTest {
         Annotation annotation = new Annotation(name + ".jpg", new File(imageFilePath).length(), imageWithMeta.getImage().getWidth(), imageWithMeta.getImage().getHeight(), imageWithMeta.getObjects());
         Files.writeString(Path.of(annotationFilePath), new SerializerUtils().toJSON(annotation));
     }
+     */
 }

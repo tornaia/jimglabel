@@ -2,6 +2,8 @@ package com.github.tornaia.jimglabel.gui.domain;
 
 public class DetectedObject {
 
+    private static final double TOLERANCE = 0.01D;
+
     private String id;
     private float top;
     private float right;
@@ -12,14 +14,33 @@ public class DetectedObject {
     }
 
     public DetectedObject(String id, float top, float right, float bottom, float left) {
-        if (top < 0 || right < 0 || bottom < 0 || left < 0 || top > 1 || right > 1 || bottom > 1 || left > 1) {
-            throw new IllegalStateException("Must not happen");
+        if (top < 0D - TOLERANCE) {
+            throw new IllegalStateException("Must not happen, top: " + top);
+        } else if (right < 0D - TOLERANCE) {
+            throw new IllegalStateException("Must not happen, right: " + right);
+        } else if (bottom < 0D - TOLERANCE) {
+            throw new IllegalStateException("Must not happen, bottom: " + bottom);
+        } else if (left < 0D - TOLERANCE) {
+            throw new IllegalStateException("Must not happen, left: " + left);
+        } else if (top > 1D + TOLERANCE) {
+            throw new IllegalStateException("Must not happen, top: " + top);
+        } else if (right > 1D + TOLERANCE) {
+            throw new IllegalStateException("Must not happen, right: " + right);
+        } else if (bottom > 1D + TOLERANCE) {
+            throw new IllegalStateException("Must not happen, bottom: " + bottom);
+        } else if (left > 1D + TOLERANCE) {
+            throw new IllegalStateException("Must not happen, left: " + left);
+        } else if (top >= bottom) {
+            throw new IllegalStateException("Must not happen, top: " + top + ", bottom: " + bottom);
+        } else if (left >= right) {
+            throw new IllegalStateException("Must not happen, left: " + left + ", right: " + right);
         }
+
         this.id = id;
-        this.top = top;
-        this.right = right;
-        this.bottom = bottom;
-        this.left = left;
+        this.top = Math.max(0, Math.min(1, top));
+        this.right = Math.max(0, Math.min(1, right));
+        this.bottom = Math.max(0, Math.min(1, bottom));
+        this.left = Math.max(0, Math.min(1, left));
     }
 
     public String getId() {
