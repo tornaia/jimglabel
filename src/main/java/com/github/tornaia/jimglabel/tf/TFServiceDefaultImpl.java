@@ -6,13 +6,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
-import org.tensorflow.DataType;
 import org.tensorflow.SavedModelBundle;
 import org.tensorflow.Tensor;
 import org.tensorflow.ndarray.NdArrays;
 import org.tensorflow.ndarray.Shape;
 import org.tensorflow.ndarray.StdArrays;
-import org.tensorflow.ndarray.buffer.ByteDataBuffer;
 import org.tensorflow.ndarray.buffer.DataBuffers;
 import org.tensorflow.proto.framework.ConfigProto;
 import org.tensorflow.proto.framework.GPUOptions;
@@ -42,7 +40,7 @@ public class TFServiceDefaultImpl implements TFService {
 
     private static final String SAVED_MODEL_DIRECTORY = "C:/workspace/tensorflow2/workspace/training_demo/exported-models/my_model/saved_model/";
     private static final String LABEL_MAP = "C:/workspace/tensorflow2/workspace/training_demo/annotations/label_map.pbtxt";
-    private static final String CARD_MAP = "C:/temp/!source_images/!object-classes.json";
+    private static final String CARD_MAP = "C:/temp/!source_images/classes.json";
 
     private final SerializerUtils serializerUtils;
     private Map<Integer, String> labels;

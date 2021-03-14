@@ -324,17 +324,18 @@ public class AppFrame {
         editableImage = event.getEditableImage();
         selectedObject = null;
 
-        String currentImageFileName = editableImage.getCurrentImageFileName();
+        Path currentImage = editableImage.getFile();
+        String currentImageFileName = currentImage.getFileName().toString();
         BufferedImage bufferedImage = editableImage.getBufferedImage();
         byte[] content = editableImage.getContent();
 
         String sourceDirectory = imageEditorService.getSourceDirectory();
-        List<String> sourceImages = imageEditorService.getSourceImageFileNames();
+        List<Path> sourceImages = imageEditorService.getSourceImageFiles();
         sourceValue.setText(sourceDirectory != null ? sourceDirectory + " (" + sourceImages.size() + ")" : "<Select directory: ALT+S>");
         String workspaceDirectory = imageEditorService.getWorkspaceDirectory();
         workspaceValue.setText(workspaceDirectory != null ? workspaceDirectory : "<Select directory: ALT+W>");
 
-        jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, sourceImages.indexOf(currentImageFileName) + 1, sourceImages.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
+        jFrame.setTitle(String.format("%s (%s/%s) - %s (%s)", currentImageFileName, sourceImages.indexOf(currentImage) + 1, sourceImages.size(), applicationSettings.getDesktopClientName(), applicationSettings.getInstallerVersion()));
 
         boolean analyzeImage = analyzeImageButton.isSelected();
         editableImagePanel = new EditableImagePanel(editableImageEventPublisher, editableImage, tfService, analyzeImage);

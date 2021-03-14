@@ -107,7 +107,7 @@ public class OptimizeService {
             throw new IllegalStateException("No object name defined");
         }
 
-        String imageFileName = editableImage.getCurrentImageFileName();
+        String imageFileName = editableImage.getFile().getFileName().toString();
         LOG.info("Generate optimized image of: {}", imageFileName);
 
         BufferedImage bufferedImage = editableImage.getBufferedImage();

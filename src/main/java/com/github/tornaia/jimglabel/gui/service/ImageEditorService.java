@@ -24,24 +24,25 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Component
 public class ImageEditorService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ImageEditorService.class);
 
-    private static final String CLASSES_FILENAME = "!object-classes.json";
+    private static final String CLASSES_FILENAME = "classes.json";
 
     private final UserSettingsProvider userSettingsProvider;
     private final EditableImageEventPublisher editableImageEventPublisher;
     private final SerializerUtils serializerUtils;
 
     private EditableImage editableImage;
-
     private int currentImageIndex;
 
     @Autowired
@@ -53,7 +54,7 @@ public class ImageEditorService {
 
     @EventListener(ContextRefreshedEvent.class)
     public void applicationStarted() {
-        this.loadImage();
+        loadImage();
     }
 
     public void updateSourceDirectory(String absolutePath) {
@@ -66,9 +67,9 @@ public class ImageEditorService {
     }
 
     public void deleteCurrentImage() {
-        String sourceDirectory = userSettingsProvider.read().getSourceDirectory();
         try {
-            Files.delete(Path.of(sourceDirectory).resolve(editableImage.getCurrentImageFileName()));
+            Files.delete(editableImage.getFile());
+            Files.deleteIfExists(getAnnotationFile());
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
         }
@@ -144,7 +145,7 @@ public class ImageEditorService {
         return objectClasses.getClasses();
     }
 
-    public List<String> getSourceImageFileNames() {
+    public List<Path> getSourceImageFiles() {
         String sourceDirectory = getSourceDirectory();
         if (sourceDirectory == null) {
             return Collections.emptyList();
@@ -152,9 +153,15 @@ public class ImageEditorService {
 
         try {
             return Files.list(Path.of(sourceDirectory))
-                    .map(Path::getFileName)
-                    .map(Path::toString)
-                    .filter(e -> e.toLowerCase(Locale.ENGLISH).endsWith(".jpg"))
+                    .flatMap(f -> {
+                        try {
+                            return Files.isDirectory(f) ? Files.list(f) : Stream.of(f);
+                        } catch (IOException e) {
+                            throw new IllegalStateException("Must not happen", e);
+                        }
+                    })
+                    .filter(e -> e.getFileName().toString().toLowerCase(Locale.ENGLISH).endsWith(".jpg"))
+                    .sorted(Comparator.comparing(Path::toString))
                     .collect(Collectors.toList());
         } catch (IOException e) {
             throw new IllegalStateException("Must not happen", e);
@@ -162,47 +169,35 @@ public class ImageEditorService {
     }
 
     public void loadImage() {
-        this.editableImage = null;
+        editableImage = null;
 
-        List<String> imageFileNames = getSourceImageFileNames();
+        List<Path> imageFiles = getSourceImageFiles();
 
-        if (imageFileNames.isEmpty()) {
-            this.currentImageIndex = -1;
+        if (imageFiles.isEmpty()) {
+            currentImageIndex = -1;
             return;
         }
 
         if (currentImageIndex < 0) {
-            currentImageIndex = imageFileNames.size() - 1;
+            currentImageIndex = imageFiles.size() - 1;
         }
 
-        if (currentImageIndex >= imageFileNames.size()) {
+        if (currentImageIndex >= imageFiles.size()) {
             currentImageIndex = 0;
         }
 
-        String currentImageFileName = imageFileNames.get(currentImageIndex);
-        Path currentImage = Path.of(getSourceDirectory()).resolve(currentImageFileName);
-        byte[] content;
-        try {
-            content = Files.readAllBytes(currentImage);
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
+        Path currentImage = imageFiles.get(currentImageIndex);
+        byte[] content = getContent(currentImage);
+        BufferedImage bufferedImage = getBufferedImage(currentImage);
 
-        BufferedImage bufferedImage;
-        try {
-            bufferedImage = ImageIO.read(new ByteArrayInputStream(content));
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
-        }
-
-        editableImage = new EditableImage(currentImageFileName, bufferedImage, new ArrayList<>(), new ArrayList<>(), content);
-        Annotation annotation = getAnnotation(content, bufferedImage);
+        editableImage = new EditableImage(currentImage, bufferedImage, new ArrayList<>(), new ArrayList<>(), content);
+        Annotation annotation = getAnnotation();
         editableImage.getDetectedObjects().addAll(annotation.getObjects());
 
         editableImageEventPublisher.updateSelectedImage(editableImage);
     }
 
-    private Annotation getAnnotation(byte[] currentImageBytes, BufferedImage bufferedImage) {
+    private Annotation getAnnotation() {
         Path annotationFile = getAnnotationFile();
         boolean hasAnnotationFile = Files.isRegularFile(annotationFile);
         if (hasAnnotationFile) {
@@ -216,24 +211,28 @@ public class ImageEditorService {
             return serializerUtils.toObject(annotationContent, Annotation.class);
         }
 
-        return new Annotation(editableImage.getCurrentImageFileName(), currentImageBytes.length, bufferedImage.getWidth(), bufferedImage.getHeight(), new ArrayList<>());
+        String currentImageFileName = editableImage.getFile().getFileName().toString();
+        long size = editableImage.getContent().length;
+        BufferedImage bufferedImage = editableImage.getBufferedImage();
+        return new Annotation(currentImageFileName, size, bufferedImage.getWidth(), bufferedImage.getHeight(), new ArrayList<>());
     }
 
     private Path getAnnotationFile() {
-        String currentImageFileName = editableImage.getCurrentImageFileName();
-        String directory = userSettingsProvider.read().getSourceDirectory();
+        Path currentImage = editableImage.getFile();
+        String currentImageFileName = currentImage.getFileName().toString();
         String annotationFileName = currentImageFileName.substring(0, currentImageFileName.lastIndexOf('.')) + ".json";
-        return Path.of(directory).resolve(annotationFileName);
+        return currentImage.resolveSibling(annotationFileName);
     }
 
     private void updateAnnotationFile() {
-        String currentImageFileName = editableImage.getCurrentImageFileName();
+        Path currentImage = editableImage.getFile();
+        String currentImageFileName = currentImage.getFileName().toString();
         BufferedImage bufferedImage = editableImage.getBufferedImage();
         List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
-        byte[] content = editableImage.getContent();
+        long size = editableImage.getContent().length;
 
         Path annotationFile = getAnnotationFile();
-        Annotation annotation = new Annotation(currentImageFileName, content.length, bufferedImage.getWidth(), bufferedImage.getHeight(), detectedObjects);
+        Annotation annotation = new Annotation(currentImageFileName, size, bufferedImage.getWidth(), bufferedImage.getHeight(), detectedObjects);
         String annotationFileContent = serializerUtils.toJSON(annotation);
         try {
             Files.writeString(annotationFile, annotationFileContent, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC);
@@ -251,6 +250,23 @@ public class ImageEditorService {
         String classId = objectClass != null ? objectClass.getId() : null;
         String className = objectClass != null ? objectClass.getName() : null;
         LOG.info("Annotation file updated: {}, objectName: {} ({})", annotationFile, className, classId);
+    }
+
+    private static BufferedImage getBufferedImage(Path imageFile) {
+        try {
+            byte[] content = getContent(imageFile);
+            return ImageIO.read(new ByteArrayInputStream(content));
+        } catch (IOException e) {
+            throw new IllegalStateException("Must not happen", e);
+        }
+    }
+
+    private static byte[] getContent(Path imageFile) {
+        try {
+            return Files.readAllBytes(imageFile);
+        } catch (IOException e) {
+            throw new IllegalStateException("Must not happen", e);
+        }
     }
 
     public void forEachImage(Consumer<EditableImage> optimizer) {
