@@ -4,7 +4,7 @@ import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
-import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClass;
 import com.github.tornaia.jimglabel.gui.util.ImageWithMeta;
 import com.github.tornaia.jimglabel.gui.util.OptimizeImageUtil;
 import org.apache.commons.io.FileUtils;
@@ -37,6 +37,7 @@ public class OptimizeService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OptimizeService.class);
 
+    private static final double TEST_RATIO = 0.2D;
     private static final String ANNOTATIONS_DIRECTORY = "annotations";
     private static final String IMAGES_DIRECTORY = "images";
     private static final String TRAIN_DIRECTORY = "train";
@@ -65,28 +66,30 @@ public class OptimizeService {
             return;
         }
 
-        try {
-            Files.createDirectories(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY));
-            FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY).toFile());
-            Files.createDirectories(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY));
-            FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY).toFile());
-        } catch (IOException e) {
-            throw new IllegalStateException("Must not happen", e);
+        if (writeToDisk) {
+            try {
+                Files.createDirectories(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY));
+                FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(ANNOTATIONS_DIRECTORY).toFile());
+                Files.createDirectories(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY));
+                FileUtils.cleanDirectory(Path.of(workspaceDirectory).resolve(IMAGES_DIRECTORY).toFile());
+            } catch (IOException e) {
+                throw new IllegalStateException("Must not happen", e);
+            }
         }
 
-        List<ObjectClasses.Class> classes = imageEditorService.getClasses();
+        List<ObjectClass> classes = imageEditorService.getClasses();
 
-        Map<String, Set<String>> generatedImagesPerClasses = new HashMap<>();
+        Map<Integer, Set<String>> generatedImagesPerClasses = new HashMap<>();
         Consumer<EditableImage> optimizer = e -> generateNextInternal(e, writeToDisk, Path.of(workspaceDirectory), classes, generatedImagesPerClasses);
         imageEditorService.forEachImage(optimizer);
 
         if (writeToDisk) {
-            splitGeneratedImages(Path.of(workspaceDirectory), generatedImagesPerClasses, 0.2D, classes);
+            splitGeneratedImages(Path.of(workspaceDirectory), generatedImagesPerClasses, classes);
         }
         generateLabelMap(Path.of(workspaceDirectory), classes, writeToDisk);
     }
 
-    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path workspaceDirectoryFile, List<ObjectClasses.Class> classes, Map<String, Set<String>> generatedImagesPerClasses) {
+    private void generateNextInternal(EditableImage editableImage, boolean writeToDisk, Path workspaceDirectoryFile, List<ObjectClass> classes, Map<Integer, Set<String>> generatedImagesPerClasses) {
         List<DetectedObject> detectedObjects = editableImage.getDetectedObjects();
 
         boolean noObject = detectedObjects.isEmpty();
@@ -99,14 +102,6 @@ public class OptimizeService {
             throw new IllegalStateException("Multiple objects found on this image");
         }
 
-        boolean missingName = detectedObjects
-                .stream()
-                .map(DetectedObject::getId)
-                .anyMatch(Objects::isNull);
-        if (missingName) {
-            throw new IllegalStateException("No object name defined");
-        }
-
         String imageFileName = editableImage.getFile().getFileName().toString();
         LOG.info("Generate optimized image of: {}", imageFileName);
 
@@ -114,9 +109,9 @@ public class OptimizeService {
         ImageWithMeta optimizedImage = OptimizeImageUtil.optimize(new ImageWithMeta(bufferedImage, detectedObjects));
 
         DetectedObject detectedObject = optimizedImage.getObjects().get(0);
-        ObjectClasses.Class detectedObjectClass = classes
+        ObjectClass detectedObjectClass = classes
                 .stream()
-                .filter(e -> e.getId().equals(detectedObject.getId()))
+                .filter(e -> Objects.equals(e.getId(), detectedObject.getId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Failed to find class for id: " + detectedObject.getId()));
 
@@ -146,7 +141,7 @@ public class OptimizeService {
         }
     }
 
-    private void splitGeneratedImages(Path workspaceDirectory, Map<String, Set<String>> generatedImagesPerClasses, double testRatio, List<ObjectClasses.Class> classes) {
+    private void splitGeneratedImages(Path workspaceDirectory, Map<Integer, Set<String>> generatedImagesPerClasses, List<ObjectClass> classes) {
         Path trainDirectory = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(TRAIN_DIRECTORY);
         Path testDirectory = workspaceDirectory.resolve(IMAGES_DIRECTORY).resolve(TEST_DIRECTORY);
 
@@ -157,11 +152,11 @@ public class OptimizeService {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        for (Map.Entry<String, Set<String>> generatedImagesPerClass : generatedImagesPerClasses.entrySet()) {
-            String classId = generatedImagesPerClass.getKey();
+        for (Map.Entry<Integer, Set<String>> generatedImagesPerClass : generatedImagesPerClasses.entrySet()) {
+            int classId = generatedImagesPerClass.getKey();
             List<String> images = new ArrayList<>(generatedImagesPerClass.getValue());
             int imageCount = images.size();
-            int testCount = (int) (testRatio * imageCount);
+            int testCount = (int) (TEST_RATIO * imageCount);
             if (testCount < 1) {
                 throw new IllegalStateException("At least one test image required but got: " + testCount);
             }
@@ -194,7 +189,7 @@ public class OptimizeService {
             });
 
             String className = classes.stream()
-                    .filter(e -> e.getId().equals(classId))
+                    .filter(e -> Objects.equals(e.getId(), classId))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("Failed to find class for id: " + classId))
                     .getName();
@@ -210,19 +205,19 @@ public class OptimizeService {
         return imageFileName.substring(0, imageFileName.lastIndexOf('.')) + ".xml";
     }
 
-    private String createXmlContent(Path workspaceDirectory, String type, Annotation annotation, List<ObjectClasses.Class> classes) {
+    private String createXmlContent(Path workspaceDirectory, String type, Annotation annotation, List<ObjectClass> classes) {
         String filename = annotation.getName();
         String path = workspaceDirectory.resolve(type).resolve(filename).toAbsolutePath().toString();
         int width = annotation.getWidth();
         int height = annotation.getHeight();
         List<DetectedObject> objects = annotation.getObjects();
         DetectedObject object = objects.get(0);
-        ObjectClasses.Class objectClass = classes.stream()
-                .filter(e -> e.getId().equals(object.getId()))
+        ObjectClass objectClass = classes.stream()
+                .filter(e -> Objects.equals(e.getId(), object.getId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Failed to find class for id: " + object.getId()));
 
-        String objectName = objectClass.getId();
+        int id = objectClass.getId();
         int xmin = Math.round(object.getLeft() * width);
         int ymin = Math.round(object.getTop() * height);
         int xmax = Math.round(object.getRight() * width);
@@ -242,7 +237,7 @@ public class OptimizeService {
                 "\t</size>" + System.lineSeparator() +
                 "\t<segmented>0</segmented>" + System.lineSeparator() +
                 "\t<object>" + System.lineSeparator() +
-                "\t\t<name>" + objectName + "</name>" + System.lineSeparator() + // 0556-Orwella-papno
+                "\t\t<name>" + id + "</name>" + System.lineSeparator() + // 556
                 "\t\t<pose>Unspecified</pose>" + System.lineSeparator() +
                 "\t\t<truncated>0</truncated>" + System.lineSeparator() +
                 "\t\t<difficult>0</difficult>" + System.lineSeparator() +
@@ -256,12 +251,12 @@ public class OptimizeService {
                 "</annotation>" + System.lineSeparator();
     }
 
-    private void generateLabelMap(Path workspaceDirectory, List<ObjectClasses.Class> classes, boolean writeToDisk) {
+    private void generateLabelMap(Path workspaceDirectory, List<ObjectClass> classes, boolean writeToDisk) {
         Path labelMapPath = workspaceDirectory.resolve(ANNOTATIONS_DIRECTORY).resolve(LABEL_MAP_FILENAME);
 
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < classes.size(); i++) {
-            ObjectClasses.Class objectClass = classes.get(i);
+            ObjectClass objectClass = classes.get(i);
             String entry =
                     "item {" + System.lineSeparator() +
                             "  id: " + (i + 1) + System.lineSeparator() +

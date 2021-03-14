@@ -4,9 +4,10 @@ import com.github.tornaia.jimglabel.common.json.SerializerUtils;
 import com.github.tornaia.jimglabel.common.setting.UserSettings;
 import com.github.tornaia.jimglabel.common.setting.UserSettingsProvider;
 import com.github.tornaia.jimglabel.gui.domain.Annotation;
-import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.domain.DetectedObject;
 import com.github.tornaia.jimglabel.gui.domain.EditableImage;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClass;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClasses;
 import com.github.tornaia.jimglabel.gui.event.EditableImageEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,7 +91,7 @@ public class ImageEditorService {
         editableImageEventPublisher.updateDetectedObjects();
     }
 
-    public void updateDetectedObjectName(DetectedObject detectedObject, String newId) {
+    public void updateDetectedObjectName(DetectedObject detectedObject, Integer newId) {
         detectedObject.setId(newId);
         updateAnnotationFile();
     }
@@ -129,7 +130,7 @@ public class ImageEditorService {
         }
     }
 
-    public List<ObjectClasses.Class> getClasses() {
+    public List<ObjectClass> getClasses() {
         UserSettings userSettings = userSettingsProvider.read();
         String sourceDirectory = userSettings.getSourceDirectory();
         Path classesJsonPath = Path.of(sourceDirectory).resolve(CLASSES_FILENAME);
@@ -240,16 +241,15 @@ public class ImageEditorService {
             throw new IllegalStateException("Must not happen", e);
         }
 
-        String objectId = detectedObjects.size() > 0 ? detectedObjects.get(0).getId() : null;
-        List<ObjectClasses.Class> classes = getClasses();
-        ObjectClasses.Class objectClass = classes
+        Integer id = detectedObjects.size() > 0 ? detectedObjects.get(0).getId() : null;
+        List<ObjectClass> classes = getClasses();
+        ObjectClass objectClass = classes
                 .stream()
-                .filter(e -> e.getId().equals(objectId))
+                .filter(e -> e.getId().equals(id))
                 .findFirst()
                 .orElse(null);
-        String classId = objectClass != null ? objectClass.getId() : null;
-        String className = objectClass != null ? objectClass.getName() : null;
-        LOG.info("Annotation file updated: {}, objectName: {} ({})", annotationFile, className, classId);
+        String name = objectClass != null ? objectClass.getName() : null;
+        LOG.info("Annotation file updated: {}, name: {} ({})", annotationFile, name, id);
     }
 
     private static BufferedImage getBufferedImage(Path imageFile) {

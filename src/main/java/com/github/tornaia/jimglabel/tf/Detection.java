@@ -6,18 +6,22 @@ public class Detection {
     private float left;
     private float bottom;
     private float right;
-    private String label;
+    private int id;
+    private String cardId;
+    private String name;
     private float score;
 
     public Detection() {
     }
 
-    public Detection(float top, float left, float bottom, float right, String label, float score) {
+    public Detection(float top, float left, float bottom, float right, int id, String cardId, String name, float score) {
         this.top = top;
         this.left = left;
         this.bottom = bottom;
         this.right = right;
-        this.label = label;
+        this.id = id;
+        this.cardId = cardId;
+        this.name = name;
         this.score = score;
     }
 
@@ -37,8 +41,16 @@ public class Detection {
         return right;
     }
 
-    public String getLabel() {
-        return label;
+    public int getId() {
+        return id;
+    }
+
+    public String getCardId() {
+        return cardId;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public float getScore() {
@@ -52,7 +64,9 @@ public class Detection {
                 ", left=" + left +
                 ", bottom=" + bottom +
                 ", right=" + right +
-                ", label='" + label + '\'' +
+                ", id='" + id + '\'' +
+                ", cardId='" + cardId + '\'' +
+                ", name='" + name + '\'' +
                 ", score=" + score +
                 '}';
     }

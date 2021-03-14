@@ -1,6 +1,7 @@
 package com.github.tornaia.jimglabel.tf;
 
 import com.github.tornaia.jimglabel.common.json.SerializerUtils;
+import com.github.tornaia.jimglabel.gui.domain.ObjectClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,9 +29,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,12 +42,12 @@ public class TFServiceDefaultImpl implements TFService {
 
     private static final Logger LOG = LoggerFactory.getLogger(TFServiceDefaultImpl.class);
 
+    private static final String TENSOR_MAP = "C:/workspace/tensorflow2/workspace/training_demo/annotations/label_map.pbtxt";
+    private static final String CLASSES_MAP = "C:/temp/!source_images/classes.json";
     private static final String SAVED_MODEL_DIRECTORY = "C:/workspace/tensorflow2/workspace/training_demo/exported-models/my_model/saved_model/";
-    private static final String LABEL_MAP = "C:/workspace/tensorflow2/workspace/training_demo/annotations/label_map.pbtxt";
-    private static final String CARD_MAP = "C:/temp/!source_images/classes.json";
 
     private final SerializerUtils serializerUtils;
-    private Map<Integer, String> labels;
+    private Map<Integer, ObjectClass> cardsMap;
     private SavedModelBundle savedModel;
 
     @Autowired
@@ -53,8 +56,8 @@ public class TFServiceDefaultImpl implements TFService {
 
         try {
             long start = System.currentTimeMillis();
-            this.labels = loadIdToCardIdLabelMap();
-            printLabels();
+            this.cardsMap = loadCardsMap();
+            printCards();
 
             this.savedModel = SavedModelBundle
                     .loader(SAVED_MODEL_DIRECTORY)
@@ -68,10 +71,10 @@ public class TFServiceDefaultImpl implements TFService {
             Set<String> actualTopDetections = detections
                     .stream()
                     .filter(e -> e.getScore() > 0.99F)
-                    .map(Detection::getLabel)
+                    .map(Detection::getCardId)
                     .collect(Collectors.toSet());
 
-            Set<String> expectedTopDetections = Set.of("0453_Dorani varázsló", "0511_Dakul kán", "0521_Mohran wra Garruda");
+            Set<String> expectedTopDetections = Set.of("0453", "0511", "0521");
             boolean success = actualTopDetections.equals(expectedTopDetections);
             if (!success) {
                 throw new IllegalStateException("Failed to detect objects, expected: " + expectedTopDetections + ", actual: " + actualTopDetections);
@@ -106,7 +109,7 @@ public class TFServiceDefaultImpl implements TFService {
             // While boxesT will have 4 as the third dimension (2 sets of (x, y) coordinates).
             // This can be verified by looking at scoresT.shape() etc.
             int maxObjects = (int) scoresT.shape().asArray()[1];
-            float detections = detectionsT.data().copyTo(NdArrays.ofFloats(Shape.of(1))).getFloat(0);
+            // float detections = detectionsT.data().copyTo(NdArrays.ofFloats(Shape.of(1))).getFloat(0);
 
             // float[] scores = scoresT.copyTo(new float[1][maxObjects])[0];
             float[] scores = StdArrays.array1dCopyOf(scoresT.data().copyTo(NdArrays.ofFloats(Shape.of(1, maxObjects))).get(0));
@@ -120,8 +123,14 @@ public class TFServiceDefaultImpl implements TFService {
             // Print all objects whose score is at least 0.25
             List<Detection> result = new ArrayList<>();
             for (int i = 0; i < scores.length; ++i) {
-                // System.out.printf("\tFound %-20s (score: %.4f)\n", labels.get((int) classes[i]), scores[i]);
-                result.add(new Detection(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], labels.get((int) classes[i]), scores[i]));
+                int id = (int) classes[i];
+                ObjectClass objectClass = cardsMap.get(id);
+                String cardId = objectClass.getCardId();
+                String name = objectClass.getName();
+                if (i == 0 && scores[i] > 0.01F) {
+                    // LOG.info("Detection-top: {}", new Detection(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], id, cardId, name, scores[i]));
+                }
+                result.add(new Detection(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], id, cardId, name, scores[i]));
                 // drawCard(inputImage, boxes[i], (int) classes[i], scores[i]);
             }
 
@@ -161,16 +170,21 @@ public class TFServiceDefaultImpl implements TFService {
         }
     }
 
-    private void printLabels() throws Exception {
-        Map<Integer, String> labelMap = loadIdToCardIdLabelMap();
-        StringBuilder sb = new StringBuilder("Objects");
+    private void printCards() throws Exception {
+        Map<Integer, ObjectClass> objectClasses = loadCardsMap();
+        StringBuilder sb = new StringBuilder("Cards");
         sb.append(System.lineSeparator());
-        sb.append(String.format("\tLabels (%d)", labelMap.size()));
+        sb.append(String.format("\tCards (%d)", objectClasses.size()));
         sb.append(System.lineSeparator());
-        sb.append(String.format("\t%-10s %s", "ID", "Name"));
+        sb.append(String.format("\t%-5s %-5s %-8s %s", "#", "ID", "CardID", "Name"));
         sb.append(System.lineSeparator());
-        for (Map.Entry<Integer, String> entry : labelMap.entrySet()) {
-            sb.append(String.format("\t%-10s %s", entry.getKey(), entry.getValue()));
+        for (Map.Entry<Integer, ObjectClass> objectClassEntry : objectClasses.entrySet()) {
+            Integer tfId = objectClassEntry.getKey();
+            ObjectClass objectClass = objectClassEntry.getValue();
+            int id = objectClass.getId();
+            String cardId = objectClass.getCardId();
+            String name = objectClass.getName();
+            sb.append(String.format("\t%-5s %-5s %-8s %s", tfId, id, cardId, name));
             sb.append(System.lineSeparator());
         }
         LOG.info(sb.toString());
@@ -185,10 +199,17 @@ public class TFServiceDefaultImpl implements TFService {
         sb.append(System.lineSeparator());
         sb.append(String.format("\t%-10s %-30s %-30s %s", "#", "Key", "Name", "Type"));
         sb.append(System.lineSeparator());
-        int i = 1;
-        for (Map.Entry<String, TensorInfo> entry : sig.getInputsMap().entrySet()) {
-            TensorInfo t = entry.getValue();
-            sb.append(String.format("\t%-10s %-30s %-30s %s", i++, entry.getKey(), t.getName(), t.getDtype()));
+
+        List<Map.Entry<String, TensorInfo>> inputTensorInfos = sig
+                .getInputsMap()
+                .entrySet()
+                .stream()
+                .sorted(Comparator.comparing(e -> e.getValue().getName())).collect(Collectors.toList());
+        for (int i = 0; i < inputTensorInfos.size(); i++) {
+            Map.Entry<String, TensorInfo> tensorInfoEntry = inputTensorInfos.get(i);
+            String tensorInfoKey = tensorInfoEntry.getKey();
+            TensorInfo tensorInfo = tensorInfoEntry.getValue();
+            sb.append(String.format("\t%-10s %-30s %-30s %s", i, tensorInfoKey, tensorInfo.getName(), tensorInfo.getDtype()));
             sb.append(System.lineSeparator());
         }
         sb.append(System.lineSeparator());
@@ -197,10 +218,17 @@ public class TFServiceDefaultImpl implements TFService {
         sb.append(System.lineSeparator());
         sb.append(String.format("\t%-10s %-30s %-30s %s", "#", "Key", "Name", "Type"));
         sb.append(System.lineSeparator());
-        i = 1;
-        for (Map.Entry<String, TensorInfo> entry : sig.getOutputsMap().entrySet()) {
-            TensorInfo t = entry.getValue();
-            sb.append(String.format("\t%-10s %-30s %-30s %s", i++, entry.getKey(), t.getName(), t.getDtype()));
+
+        List<Map.Entry<String, TensorInfo>> outputTensorInfos = sig
+                .getOutputsMap()
+                .entrySet()
+                .stream()
+                .sorted(Comparator.comparing(e -> e.getValue().getName())).collect(Collectors.toList());
+        for (int i = 0; i < outputTensorInfos.size(); i++) {
+            Map.Entry<String, TensorInfo> tensorInfoEntry = outputTensorInfos.get(i);
+            String tensorInfoKey = tensorInfoEntry.getKey();
+            TensorInfo tensorInfo = tensorInfoEntry.getValue();
+            sb.append(String.format("\t%-10s %-30s %-30s %s", i, tensorInfoKey, tensorInfo.getName(), tensorInfo.getDtype()));
             sb.append(System.lineSeparator());
         }
         LOG.info(sb.toString());
@@ -232,48 +260,69 @@ public class TFServiceDefaultImpl implements TFService {
         throw new IllegalStateException("Must not happen, name: " + name);
     }
 
-    private Map<Integer, String> loadIdToCardIdLabelMap() throws Exception {
-        Path path = Paths.get(LABEL_MAP);
+    private Map<Integer, ObjectClass> loadCardsMap() throws Exception {
+        Map<Integer, String> tensorMap = loadTensorMap();
+        Map<Integer, ObjectClass> integerObjectClassMap = loadClassesMap();
 
-        List<Integer> ids = new ArrayList<>();
-        List<String> names = new ArrayList<>();
-        Files.lines(path).forEach(line -> {
-            String trimmedLine = line.trim();
-            if (trimmedLine.startsWith("id: ")) {
-                int id = Integer.parseInt(trimmedLine.split(": ")[1]);
-                ids.add(id);
-            } else if (trimmedLine.startsWith("name: '")) {
-                String name = trimmedLine.split(": '")[1];
-                if (!name.endsWith("'")) {
-                    throw new IllegalStateException("Must not happen, line: " + line);
-                }
-                name = name.substring(0, name.length() - 1);
-                names.add(name);
-            }
-        });
-        if (ids.size() != names.size()) {
-            throw new IllegalStateException("Must not happen, ids: " + ids.size() + ", names: " + names.size());
+        Map<Integer, ObjectClass> labelMap = tensorMap.entrySet()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> integerObjectClassMap.get(Integer.parseInt(e.getValue()))));
+
+        boolean missingValue = labelMap
+                .values()
+                .stream()
+                .anyMatch(Objects::isNull);
+        if (missingValue) {
+            throw new IllegalStateException("Failed to load label map, tensorMap: " + tensorMap + ", integerObjectClassMap: " + integerObjectClassMap);
         }
 
-        Map<Integer, String> labels = new HashMap<>();
-        Map<String, String> cardMap = loadCardIdToCardNameMap();
-        for (int i = 0; i < ids.size(); i++) {
-            labels.put(ids.get(i), cardMap.get(names.get(i)));
-        }
-        return labels;
+        return labelMap;
     }
 
-    private Map<String, String> loadCardIdToCardNameMap() throws Exception {
-        String s = Files.readString(Path.of(CARD_MAP));
-        Map<?, ?> map = serializerUtils.toObject(s, Map.class);
-        List<Map<String, String>> classes = (List<Map<String, String>>) map.get("classes");
+    private Map<Integer, String> loadTensorMap() throws Exception {
+        String tensorMapContent = Files.readString(Paths.get(TENSOR_MAP));
+
+        Map<Integer, String> tensorMap = new HashMap<>();
+        for (String entry : tensorMapContent.split("item \\{")) {
+            if (entry.isEmpty()) {
+                continue;
+            }
+
+            Integer id = null;
+            String name = null;
+            for (String line : entry.split("\n")) {
+                String trimmedLine = line.trim();
+                if (trimmedLine.startsWith("id: ")) {
+                    id = Integer.parseInt(trimmedLine.split(": ")[1]);
+                } else if (trimmedLine.startsWith("name: '")) {
+                    name = trimmedLine.split(": '")[1];
+                    if (!name.endsWith("'")) {
+                        throw new IllegalStateException("Must not happen, line: " + line);
+                    }
+                    name = name.substring(0, name.length() - 1);
+                }
+            }
+            if (id == null || name == null) {
+                throw new IllegalStateException("Failed to parse file");
+            }
+
+            tensorMap.put(id, name);
+        }
+        return tensorMap;
+    }
+
+    private Map<Integer, ObjectClass> loadClassesMap() throws Exception {
+        String classesMapContent = Files.readString(Path.of(CLASSES_MAP));
+        Map<?, ?> classesMap = serializerUtils.toObject(classesMapContent, Map.class);
+        List<Map<String, String>> classes = (List<Map<String, String>>) classesMap.get("classes");
         return classes
                 .stream()
-                .collect(Collectors.toMap(e -> e.get("id"), e -> e.get("cardId") + "_" + e.get("name")));
+                .collect(Collectors.toMap(e -> Integer.parseInt(e.get("id")), e -> new ObjectClass(Integer.parseInt(e.get("id")), e.get("cardId"), e.get("name"))));
     }
 
     private void drawCard(BufferedImage bufferedImage, float[] box, int clazz, float score) {
-        String cardName = labels.get(clazz);
+        ObjectClass objectClass = cardsMap.get(clazz);
+        String cardName = objectClass.getName();
         String label = String.format("%s %.4f", cardName, score);
 
         int imageHeight = bufferedImage.getHeight();

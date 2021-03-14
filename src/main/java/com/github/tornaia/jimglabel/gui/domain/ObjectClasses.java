@@ -4,44 +4,13 @@ import java.util.List;
 
 public class ObjectClasses {
 
-    private List<Class> classes;
+    private List<ObjectClass> classes;
 
-    public List<Class> getClasses() {
+    public List<ObjectClass> getClasses() {
         return classes;
     }
 
-    public void setClasses(List<Class> classes) {
+    public void setClasses(List<ObjectClass> classes) {
         this.classes = classes;
-    }
-
-    public static final class Class {
-
-        private String id;
-        private String cardId;
-        private String name;
-
-        public String getId() {
-            return id;
-        }
-
-        public void setId(String id) {
-            this.id = id;
-        }
-
-        public String getCardId() {
-            return cardId;
-        }
-
-        public void setCardId(String cardId) {
-            this.cardId = cardId;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
     }
 }

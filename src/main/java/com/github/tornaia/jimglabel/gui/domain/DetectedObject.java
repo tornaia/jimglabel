@@ -4,7 +4,7 @@ public class DetectedObject {
 
     private static final double TOLERANCE = 0.01D;
 
-    private String id;
+    private Integer id;
     private float top;
     private float right;
     private float bottom;
@@ -13,7 +13,7 @@ public class DetectedObject {
     public DetectedObject() {
     }
 
-    public DetectedObject(String id, float top, float right, float bottom, float left) {
+    public DetectedObject(Integer id, float top, float right, float bottom, float left) {
         if (top < 0D - TOLERANCE) {
             throw new IllegalStateException("Must not happen, top: " + top);
         } else if (right < 0D - TOLERANCE) {
@@ -43,11 +43,11 @@ public class DetectedObject {
         this.left = Math.max(0, Math.min(1, left));
     }
 
-    public String getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Integer id) {
         this.id = id;
     }
 

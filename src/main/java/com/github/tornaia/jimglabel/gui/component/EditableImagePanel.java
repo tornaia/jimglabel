@@ -8,6 +8,9 @@ import com.github.tornaia.jimglabel.gui.util.DetectedObjectUtil;
 import com.github.tornaia.jimglabel.gui.util.ObjectControl;
 import com.github.tornaia.jimglabel.tf.Detection;
 import com.github.tornaia.jimglabel.tf.TFService;
+import com.github.tornaia.jimglabel.tf.TFServiceDefaultImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,6 +27,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class EditableImagePanel extends JPanel {
+
+    private static final Logger LOG = LoggerFactory.getLogger(EditableImagePanel.class);
 
     private static final float MIN_SCORE = 0.50F;
 
@@ -54,14 +59,14 @@ public class EditableImagePanel extends JPanel {
                             .collect(Collectors.toList());
                     if (filteredTensorFlowDetections.isEmpty()) {
                         Detection notGoodEnoughButStillTheBest = tensorFlowDetections.get(0);
-                        if (notGoodEnoughButStillTheBest.getScore() > 0.02F){
+                        if (notGoodEnoughButStillTheBest.getScore() > 0.02F) {
                             filteredTensorFlowDetections.add(notGoodEnoughButStillTheBest);
                         }
                     }
                     editableImage.getTensorFlowDetections().addAll(filteredTensorFlowDetections);
-                    System.out.println("Found " + filteredTensorFlowDetections.size() + " candidates");
+                    LOG.info("Found {} candidates", filteredTensorFlowDetections.size());
                     for (Detection filteredTensorFlowDetection : filteredTensorFlowDetections) {
-                        System.out.println("\t\t" + filteredTensorFlowDetection);
+                        LOG.info("\t\t{}", filteredTensorFlowDetection);
                     }
                     repaint();
                 }).start();
@@ -256,7 +261,7 @@ public class EditableImagePanel extends JPanel {
                 int scaledImageWidth = scaledImage.getWidth(null);
                 int scaledImageHeight = scaledImage.getHeight(null);
                 Point c = new Point(Math.min(scaledImageWidth, Math.max(0, e.getX())), Math.min(scaledImageHeight, Math.max(0, e.getY())));
-                String id = selectedObject != null ? selectedObject.getId() : null;
+                Integer id = selectedObject != null ? selectedObject.getId() : null;
 
                 if (selectedObjectControl == null ||
                         selectedObjectControl == ObjectControl.TOP_LEFT ||
@@ -420,7 +425,10 @@ public class EditableImagePanel extends JPanel {
             g2d.setFont(new Font("Serif", Font.BOLD, 18));
             FontMetrics fm = g2d.getFontMetrics();
 
-            String label = e.getLabel() + " " + String.format("%.4f", e.getScore());
+            String cardId = e.getCardId();
+            String name = e.getName();
+            float score = e.getScore();
+            String label = String.format("%s %s %.4f", cardId, name, score);
             g2d.drawString(label, x + 4, Math.max(fm.getHeight(), y + fm.getHeight()));
         });
 

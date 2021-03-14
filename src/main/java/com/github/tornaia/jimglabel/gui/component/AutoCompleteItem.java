@@ -4,13 +4,10 @@ import java.util.Objects;
 
 public class AutoCompleteItem {
 
-    private final String id;
+    private final int id;
     private final String label;
 
-    public AutoCompleteItem(String id, String label) {
-        if (id == null) {
-            throw new IllegalStateException("Must not happen, id must not be null");
-        }
+    public AutoCompleteItem(int id, String label) {
         if (label == null) {
             throw new IllegalStateException("Must not happen, label must not be null");
         }
@@ -19,7 +16,7 @@ public class AutoCompleteItem {
         this.label = label;
     }
 
-    public String getId() {
+    public int getId() {
         return id;
     }
 
@@ -32,7 +29,7 @@ public class AutoCompleteItem {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AutoCompleteItem that = (AutoCompleteItem) o;
-        return id.equals(that.id);
+        return id == that.id;
     }
 
     @Override
