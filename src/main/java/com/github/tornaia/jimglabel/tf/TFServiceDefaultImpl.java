@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
@@ -62,12 +63,18 @@ public class TFServiceDefaultImpl implements TFService {
                     .load();
             printSignature(savedModel);
 
-            BufferedImage bgr = ImageIO.read(new ClassPathResource("test_with_3_cards.jpg").getInputStream());
-            BufferedImage abgr = new BufferedImage(bgr.getWidth(), bgr.getHeight(), BufferedImage.TYPE_4BYTE_ABGR);
-            abgr.getGraphics().drawImage(bgr, 0, 0, null);
-            List<Detection> detections = detect(abgr);
-            if (detections.size() != 3) {
-                // throw new IllegalStateException("Expected 4 cards on this image but found " + detections.size());
+            BufferedImage testImage = ImageIO.read(new ClassPathResource("tf_test_image.jpg").getInputStream());
+            List<Detection> detections = detect(testImage);
+            Set<String> actualTopDetections = detections
+                    .stream()
+                    .filter(e -> e.getScore() > 0.99F)
+                    .map(Detection::getLabel)
+                    .collect(Collectors.toSet());
+
+            Set<String> expectedTopDetections = Set.of("0453_Dorani varázsló", "0511_Dakul kán", "0521_Mohran wra Garruda");
+            boolean success = actualTopDetections.equals(expectedTopDetections);
+            if (!success) {
+                throw new IllegalStateException("Failed to detect objects, expected: " + expectedTopDetections + ", actual: " + actualTopDetections);
             }
             LOG.info("TensorFlow initialized in {} ms", (System.currentTimeMillis() - start));
         } catch (Exception e) {
@@ -77,7 +84,7 @@ public class TFServiceDefaultImpl implements TFService {
 
     @Override
     public List<Detection> detect(BufferedImage inputImage) {
-        Tensor<TUint8> input = makeImageTensorCopiedReworkedFromSomewhereElse(inputImage);
+        Tensor<TUint8> input = createTensor(inputImage);
 
         List<Tensor<?>> outputs = savedModel
                 .session()
@@ -123,7 +130,7 @@ public class TFServiceDefaultImpl implements TFService {
         }
     }
 
-    private static Tensor<TUint8> makeImageTensorCopiedReworkedFromSomewhereElse(BufferedImage img) {
+    private static Tensor<TUint8> createTensor(BufferedImage img) {
         if (img.getType() == BufferedImage.TYPE_BYTE_INDEXED ||
                 img.getType() == BufferedImage.TYPE_BYTE_BINARY ||
                 img.getType() == BufferedImage.TYPE_BYTE_GRAY ||
@@ -133,6 +140,7 @@ public class TFServiceDefaultImpl implements TFService {
             bgr.getGraphics().drawImage(img, 0, 0, null);
             img = bgr;
         }
+
         if (img.getType() != BufferedImage.TYPE_3BYTE_BGR) {
             throw new IllegalStateException(String.format("Expected 3-byte BGR encoding in BufferedImage, found %d. This code could be made more robust", img.getType()));
         }
@@ -153,46 +161,49 @@ public class TFServiceDefaultImpl implements TFService {
         }
     }
 
-    private static byte[] convert3ByteBGRTo3ByteRGB(byte[] bgr) {
-        byte[] rgb = new byte[bgr.length];
-        for (int i = 0; i < bgr.length; i += 3) {
-            rgb[i] = bgr[i + 2];
-            rgb[i + 1] = bgr[i + 1];
-            rgb[i + 2] = bgr[i];
+    private void printLabels() throws Exception {
+        Map<Integer, String> labelMap = loadIdToCardIdLabelMap();
+        StringBuilder sb = new StringBuilder("Objects");
+        sb.append(System.lineSeparator());
+        sb.append(String.format("\tLabels (%d)", labelMap.size()));
+        sb.append(System.lineSeparator());
+        sb.append(String.format("\t%-10s %s", "ID", "Name"));
+        sb.append(System.lineSeparator());
+        for (Map.Entry<Integer, String> entry : labelMap.entrySet()) {
+            sb.append(String.format("\t%-10s %s", entry.getKey(), entry.getValue()));
+            sb.append(System.lineSeparator());
         }
-        return rgb;
-    }
-
-    private static byte[] convert4ByteABGRTo3ByteRGB(byte[] abgr) {
-        byte[] rgb = new byte[abgr.length / 4 * 3];
-        for (int i = 0; i < abgr.length; i += 4) {
-            int j = i / 4 * 3;
-            rgb[j] = abgr[i + 3];
-            rgb[j + 1] = abgr[i + 2];
-            rgb[j + 2] = abgr[i + 1];
-        }
-        return rgb;
+        LOG.info(sb.toString());
     }
 
     private static void printSignature(SavedModelBundle model) {
         MetaGraphDef m = model.metaGraphDef();
         SignatureDef sig = m.getSignatureDefOrThrow("serving_default");
-        int numInputs = sig.getInputsCount();
+        StringBuilder sb = new StringBuilder("Model signature");
+        sb.append(System.lineSeparator());
+        sb.append(String.format("\tInputs (%d)", sig.getInputsCount()));
+        sb.append(System.lineSeparator());
+        sb.append(String.format("\t%-10s %-30s %-30s %s", "#", "Key", "Name", "Type"));
+        sb.append(System.lineSeparator());
         int i = 1;
-        System.out.println("MODEL SIGNATURE");
-        System.out.println("Inputs:");
         for (Map.Entry<String, TensorInfo> entry : sig.getInputsMap().entrySet()) {
             TensorInfo t = entry.getValue();
-            System.out.printf("%d of %d: %-20s (Node name in graph: %-20s, type: %s)\n", i++, numInputs, entry.getKey(), t.getName(), t.getDtype());
+            sb.append(String.format("\t%-10s %-30s %-30s %s", i++, entry.getKey(), t.getName(), t.getDtype()));
+            sb.append(System.lineSeparator());
         }
-        int numOutputs = sig.getOutputsCount();
+        sb.append(System.lineSeparator());
+
+        sb.append(String.format("\tOutputs (%d)", sig.getOutputsCount()));
+        sb.append(System.lineSeparator());
+        sb.append(String.format("\t%-10s %-30s %-30s %s", "#", "Key", "Name", "Type"));
+        sb.append(System.lineSeparator());
         i = 1;
-        System.out.println("Outputs:");
         for (Map.Entry<String, TensorInfo> entry : sig.getOutputsMap().entrySet()) {
             TensorInfo t = entry.getValue();
-            System.out.printf("%d of %d: %-20s (Node name in graph: %-20s, type: %s)\n", i++, numOutputs, entry.getKey(), t.getName(), t.getDtype());
+            sb.append(String.format("\t%-10s %-30s %-30s %s", i++, entry.getKey(), t.getName(), t.getDtype()));
+            sb.append(System.lineSeparator());
         }
-        System.out.println("-----------------------------------------------");
+        LOG.info(sb.toString());
     }
 
     private static String getInputNodeName(SavedModelBundle model, String name) {
@@ -221,16 +232,6 @@ public class TFServiceDefaultImpl implements TFService {
         throw new IllegalStateException("Must not happen, name: " + name);
     }
 
-    private void printLabels() throws Exception {
-        System.out.println("LABELS");
-        Map<Integer, String> labelMap = loadIdToCardIdLabelMap();
-        for (Map.Entry<Integer, String> entry : labelMap.entrySet()) {
-            System.out.printf("%-5d: %s\n", entry.getKey(), entry.getValue());
-        }
-        System.out.println("-----------------------------------------------");
-    }
-
-    // TODO parse properly
     private Map<Integer, String> loadIdToCardIdLabelMap() throws Exception {
         Path path = Paths.get(LABEL_MAP);
 
@@ -262,7 +263,6 @@ public class TFServiceDefaultImpl implements TFService {
         return labels;
     }
 
-    // TODO parse properly
     private Map<String, String> loadCardIdToCardNameMap() throws Exception {
         String s = Files.readString(Path.of(CARD_MAP));
         Map<?, ?> map = serializerUtils.toObject(s, Map.class);
@@ -272,8 +272,9 @@ public class TFServiceDefaultImpl implements TFService {
                 .collect(Collectors.toMap(e -> e.get("id"), e -> e.get("cardId") + "_" + e.get("name")));
     }
 
-    private void drawCard(BufferedImage bufferedImage, float[] box, int clazz, float score) throws Exception {
-        String label = loadIdToCardIdLabelMap().get(clazz) + " " + String.format("%.4f", score);
+    private void drawCard(BufferedImage bufferedImage, float[] box, int clazz, float score) {
+        String cardName = labels.get(clazz);
+        String label = String.format("%s %.4f", cardName, score);
 
         int imageHeight = bufferedImage.getHeight();
         int imageWidth = bufferedImage.getWidth();
