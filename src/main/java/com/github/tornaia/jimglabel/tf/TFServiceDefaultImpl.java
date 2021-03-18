@@ -123,8 +123,8 @@ public class TFServiceDefaultImpl implements TFService {
             // Print all objects whose score is at least 0.25
             List<Detection> result = new ArrayList<>();
             for (int i = 0; i < scores.length; ++i) {
-                int id = (int) classes[i];
-                ObjectClass objectClass = cardsMap.get(id);
+                ObjectClass objectClass = cardsMap.get((int) classes[i]);
+                int id = objectClass.getId();
                 String cardId = objectClass.getCardId();
                 String name = objectClass.getName();
                 if (i == 0 && scores[i] > 0.01F) {
@@ -149,10 +149,10 @@ public class TFServiceDefaultImpl implements TFService {
             bgr.getGraphics().drawImage(img, 0, 0, null);
             img = bgr;
         }
-
         if (img.getType() != BufferedImage.TYPE_3BYTE_BGR) {
             throw new IllegalStateException(String.format("Expected 3-byte BGR encoding in BufferedImage, found %d. This code could be made more robust", img.getType()));
         }
+
         byte[] data = ((DataBufferByte) img.getData().getDataBuffer()).getData();
         // ImageIO.read seems to produce BGR-encoded images, but the model expects RGB.
         bgr2rgb(data);
